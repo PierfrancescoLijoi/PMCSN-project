@@ -81,9 +81,9 @@ def print_simulation_stats(stats, type):
     mean_coord, ci_coord = calculate_confidence_interval(stats.coord_wait_times)
     print(f"Coordinator Edge - Average wait time: {mean_coord:.6f} ± {ci_coord:.6f}")
 
-    # Totali job elaborati
-    total_E = len(stats.edge_wait_times)
-    total_C = len(stats.cloud_wait_times)
+    # Totali job elaborati (usando count veri, non lunghezza liste)
+    total_E = sum(stats.total_count_E) if hasattr(stats, 'total_count_E') else len(stats.edge_wait_times)
+    total_C = sum(stats.total_count_C) if hasattr(stats, 'total_count_C') else len(stats.cloud_wait_times)
     print(f"\nTotal jobs E processed: {total_E}")
     print(f"Total jobs C processed: {total_C}")
 
@@ -104,15 +104,20 @@ def plot_analysis(wait_times, seeds, name, sim_type):
 
     plt.figure(figsize=(10, 6))
 
+    found = False
     for run_index, response_times in enumerate(wait_times):
+        if not response_times:
+            continue
         times = [point[0] for point in response_times]
         avg_response_times = [point[1] for point in response_times]
         plt.plot(times, avg_response_times, label=f'Seed {seeds[run_index]}')
+        found = True
 
     plt.xlabel('Time (s)')
     plt.ylabel('Average wait time (s)')
     plt.title(f'Transient Analysis - {name}')
-    plt.legend()
+    if found:
+        plt.legend()
     plt.grid(True)
 
     output_path = os.path.join(output_dir, f'{name}.png')

@@ -67,6 +67,7 @@ def execute(stats, stop):
                     service = GetServiceCloud()
                     stats.t.completion_cloud = stats.t.current + service
                     stats.area_cloud.service += service
+                    stats.area_C.service += service #mancava questo aggiornamento#
             else:
                 stats.number_coord += 1
                 stats.queue_coord_low.append("P1P2")

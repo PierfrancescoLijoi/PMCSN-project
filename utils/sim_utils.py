@@ -5,7 +5,7 @@ import statistics
 from libraries.rngs import selectStream, random as rng_random
 from libraries import rvms
 import utils.constants as cs
-
+import sys
 arrival_temp = cs.START  # variabile globale per il tempo di arrivo corrente
 
 
@@ -54,6 +54,9 @@ def GetArrival(current_time):
     global arrival_temp
     lam = GetLambda(current_time)  # λ già in job/secondo
     arrival_temp += Exponential(1 / lam)
+    #print(f"[λ={lam:.6f}] Arrivo generato a {arrival_temp:.7f}")
+    #sys.stdout.flush()
+
     return arrival_temp
 
 def reset_arrival_temp():
