@@ -40,7 +40,13 @@ TRANSIENT_ANALYSIS = 1
 # venga classificato come sconosciuto (P5) e inviato al Cloud
 # Riferimento: Tabella di routing e testo "Equazioni di traffico"
 P_C = 0.4
+P_COORD = 1 - P_C  # 60% → Coordinator
 
+# Probabilità condizionate (dentro al 60% Coordinator)
+P1_PROB = 0.20 / P_COORD
+P2_PROB = 0.25 / P_COORD
+P3_PROB = 0.10 / P_COORD
+P4_PROB = 0.05 / P_COORD
 
 # -------------------------
 # Configurazione dei server

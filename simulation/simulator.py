@@ -55,41 +55,62 @@ def execute(stats, stop):
 
     # Completamento Edge
     elif stats.t.current == stats.t.completion_edge:
-        job_type = stats.queue_edge.pop(0)
-        stats.index_edge += 1
-        stats.number_edge -= 1
+        if stats.queue_edge:  # <-- evita pop da lista vuota
+            job_type = stats.queue_edge.pop(0)
+            stats.index_edge += 1
+            stats.number_edge -= 1
 
-        if job_type == "E":
-            selectStream(3)
-            if rng_random() < cs.P_C:
-                stats.number_cloud += 1
-                if stats.number_cloud == 1:
-                    service = GetServiceCloud()
-                    stats.t.completion_cloud = stats.t.current + service
-                    stats.area_cloud.service += service
-                    stats.area_C.service += service
-            else:
-                stats.number_coord += 1
-                # Aggiungi questa linea per tracciare i pacchetti E inviati al coordinator
-                stats.queue_coord_low.append("P1P2")
-                if stats.number_coord == 1:
-                    service = GetServiceCoordP1P2()
-                    stats.t.completion_coord = stats.t.current + service
-                    stats.area_coord.service += service
-        elif job_type == "C":
-            stats.count_C += 1
+            if job_type == "E":
+                selectStream(3)
+                rand_val = rng_random()  # numero casuale per la classificazione globale
 
-        # Se Edge ancora con job in coda
-        if stats.number_edge > 0:
-            next_job = stats.queue_edge[0]
-            if next_job == "E":
-                service = GetServiceEdgeE()
-                stats.t.completion_edge = stats.t.current + service
-                stats.area_edge.service += service
+                if rand_val < cs.P_C:  # 40% va al Cloud
+                    stats.number_cloud += 1
+                    if stats.number_cloud == 1:
+                        service = GetServiceCloud()
+                        stats.t.completion_cloud = stats.t.current + service
+                        stats.area_cloud.service += service
+                        stats.area_C.service += service
+                else:  # 60% va al Coordinator Server Edge
+                    stats.number_coord += 1
+
+                    # normalizza tra 0 e 1 all'interno del ramo coordinator
+                    coord_rand = (rand_val - cs.P_C) / (1 - cs.P_C)
+                    if coord_rand < cs.P1_PROB:  # 20% assoluto
+                        stats.queue_coord_low.append("P1")
+                    elif coord_rand < cs.P1_PROB + cs.P2_PROB:  # 25% assoluto
+                        stats.queue_coord_low.append("P2")
+                    elif coord_rand < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:  # 10% assoluto
+                        stats.queue_coord_high.append("P3")
+                    else:  # 5% assoluto
+                        stats.queue_coord_high.append("P4")
+
+                    if stats.number_coord == 1:
+                        if stats.queue_coord_high:
+                            service = GetServiceCoordP3P4()
+                        else:
+                            service = GetServiceCoordP1P2()
+                        stats.t.completion_coord = stats.t.current + service
+                        stats.area_coord.service += service
+
+            elif job_type == "C":
+                # gestisci pacchetti C (update)
+                stats.count_C += 1
+
+            # se rimangono job in Edge, programma il prossimo servizio
+            if stats.number_edge > 0:
+                next_job = stats.queue_edge[0]
+                if next_job == "E":
+                    service = GetServiceEdgeE()
+                    stats.t.completion_edge = stats.t.current + service
+                    stats.area_edge.service += service
+                    stats.area_E.service += service
+                else:  # job_type == "C"
+                    service = GetServiceEdgeC()
+                    stats.t.completion_edge = stats.t.current + service
+                    stats.area_edge.service += service
             else:
-                service = GetServiceEdgeC()
-                stats.t.completion_edge = stats.t.current + service
-                stats.area_edge.service += service
+                stats.t.completion_edge = cs.INFINITY
         else:
             stats.t.completion_edge = cs.INFINITY
 
@@ -115,16 +136,27 @@ def execute(stats, stop):
     elif stats.t.current == stats.t.completion_coord:
         stats.index_coord += 1
         stats.number_coord -= 1
+
+        # Contiamo separatamente P1/P2/P3/P4
+        if stats.queue_coord_high:  # P3/P4
+            p_type = stats.queue_coord_high.pop(0)
+            stats.count_E += 1
+            if p_type == "P3":
+                stats.count_E_P3 += 1
+            else:
+                stats.count_E_P4 += 1
+        else:  # P1/P2
+            p_type = stats.queue_coord_low.pop(0)
+            stats.count_E += 1
+            if p_type == "P1":
+                stats.count_E_P1 += 1
+            else:
+                stats.count_E_P2 += 1
+
         if stats.number_coord > 0:
-            if stats.queue_coord_high:  # P3/P4
-                stats.queue_coord_high.pop(0)
-                stats.count_E += 1  # Conta P3/P4 completati
-                stats.count_E_P3P4 += 1  # Aggiungere questa linea
+            if stats.queue_coord_high:
                 service = GetServiceCoordP3P4()
-            else:  # P1/P2
-                stats.queue_coord_low.pop(0)
-                stats.count_E += 1  # Conta P1/P2 completati
-                stats.count_E_P1P2 += 1  # Aggiungere questa linea
+            else:
                 service = GetServiceCoordP1P2()
             stats.t.completion_coord = stats.t.current + service
             stats.area_coord.service += service
@@ -138,8 +170,10 @@ def return_stats(stats, t, seed):
         'cloud_avg_wait': stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0,
         'coord_avg_wait': stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0,
         'count_E': stats.count_E,
-        'count_E_P1P2': stats.count_E_P1P2,  # Aggiungi questi
-        'count_E_P3P4': stats.count_E_P3P4,  # due nuovi campi
+        'count_E_P1': stats.count_E_P1,
+        'count_E_P2': stats.count_E_P2,
+        'count_E_P3': stats.count_E_P3,
+        'count_E_P4': stats.count_E_P4,
         'count_C': stats.count_C,
         'E_utilization': stats.area_E.service / t if t > 0 else 0,
         'C_utilization': stats.area_C.service / t if t > 0 else 0,

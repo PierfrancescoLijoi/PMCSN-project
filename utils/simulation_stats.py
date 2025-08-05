@@ -29,8 +29,11 @@ class SimulationStats:
         self.index_coord = 0
         self.count_E = 0  # Aggiunto contatore per pacchetti E (P1-P4)
         self.count_C = 0  # Già presente per pacchetti C (P5)
-        self.count_E_P1P2 = 0  # Contatore specifico per P1/P2
-        self.count_E_P3P4 = 0  # Contatore specifico per P3/P4
+        self.count_E_P1 = 0
+        self.count_E_P2 = 0
+        self.count_E_P3 = 0
+        self.count_E_P4 = 0
+
 
         self.number_edge = 0
         self.number_cloud = 0
@@ -77,7 +80,6 @@ class ReplicationStats:
         self.cloud_wait_times = []
         self.coord_wait_times = []
 
-        # Per analisi transiente (opzionale)
         self.edge_wait_interval = []
         self.cloud_wait_interval = []
         self.coord_wait_interval = []
