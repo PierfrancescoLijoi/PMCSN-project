@@ -37,6 +37,27 @@ def execute(stats, stop):
 
     stats.t.current = stats.t.next
 
+    # Registrazione per analisi transiente ogni 1000 secondi
+    interval = 1000
+    if int(stats.t.current) % interval == 0:
+        if stats.index_edge > 0:
+            avg_edge = stats.area_edge.node / stats.index_edge
+        else:
+            avg_edge = 0
+        if stats.index_cloud > 0:
+            avg_cloud = stats.area_cloud.node / stats.index_cloud
+        else:
+            avg_cloud = 0
+        if stats.index_coord > 0:
+            avg_coord = stats.area_coord.node / stats.index_coord
+        else:
+            avg_coord = 0
+
+        stats.edge_wait_times.append((stats.t.current, avg_edge))
+        stats.cloud_wait_times.append((stats.t.current, avg_cloud))
+        stats.coord_wait_times.append((stats.t.current, avg_coord))
+
+
     # Gestione arrivo dal sistema
     if stats.t.current == stats.t.arrival:
         stats.job_arrived += 1

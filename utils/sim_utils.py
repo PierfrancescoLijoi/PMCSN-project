@@ -134,3 +134,7 @@ def append_stats(replicationStats, results, stats):
     replicationStats.edge_wait_times.append(results['edge_avg_wait'])
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
+    # Aggiunta per analisi transiente
+    replicationStats.edge_wait_interval.append(stats.edge_wait_times)
+    replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
+    replicationStats.coord_wait_interval.append(stats.coord_wait_times)
