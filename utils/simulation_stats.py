@@ -18,12 +18,19 @@ class Time:
 
 class SimulationStats:
     def __init__(self):
+        self.count_P1 = 0
+        self.count_P2 = 0
+        self.count_P3 = 0
+        self.count_P4 = 0
+        self.count_P5 = 0
         self.job_arrived = 0
         self.index_edge = 0
         self.index_cloud = 0
         self.index_coord = 0
-        self.count_E = 0
-        self.count_C = 0
+        self.count_E = 0  # Aggiunto contatore per pacchetti E (P1-P4)
+        self.count_C = 0  # Già presente per pacchetti C (P5)
+        self.count_E_P1P2 = 0  # Contatore specifico per P1/P2
+        self.count_E_P3P4 = 0  # Contatore specifico per P3/P4
 
         self.number_edge = 0
         self.number_cloud = 0
@@ -55,6 +62,8 @@ class SimulationStats:
         self.queue_edge.clear()
         self.queue_coord_high.clear()
         self.queue_coord_low.clear()
+        self.count_E = 0  # Reset del contatore E
+        self.count_C = 0  # Reset del contatore C
 
     def calculate_area_queue(self):
         self.area_edge.queue = self.area_edge.node - self.area_edge.service

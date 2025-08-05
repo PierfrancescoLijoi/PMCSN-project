@@ -67,16 +67,17 @@ def execute(stats, stop):
                     service = GetServiceCloud()
                     stats.t.completion_cloud = stats.t.current + service
                     stats.area_cloud.service += service
-                    stats.area_C.service += service #mancava questo aggiornamento#
+                    stats.area_C.service += service
             else:
                 stats.number_coord += 1
+                # Aggiungi questa linea per tracciare i pacchetti E inviati al coordinator
                 stats.queue_coord_low.append("P1P2")
                 if stats.number_coord == 1:
                     service = GetServiceCoordP1P2()
                     stats.t.completion_coord = stats.t.current + service
                     stats.area_coord.service += service
         elif job_type == "C":
-            stats.count_C += 1  # pacchetto P5 update → esce
+            stats.count_C += 1
 
         # Se Edge ancora con job in coda
         if stats.number_edge > 0:
@@ -115,11 +116,15 @@ def execute(stats, stop):
         stats.index_coord += 1
         stats.number_coord -= 1
         if stats.number_coord > 0:
-            if stats.queue_coord_high:
+            if stats.queue_coord_high:  # P3/P4
                 stats.queue_coord_high.pop(0)
+                stats.count_E += 1  # Conta P3/P4 completati
+                stats.count_E_P3P4 += 1  # Aggiungere questa linea
                 service = GetServiceCoordP3P4()
-            else:
+            else:  # P1/P2
                 stats.queue_coord_low.pop(0)
+                stats.count_E += 1  # Conta P1/P2 completati
+                stats.count_E_P1P2 += 1  # Aggiungere questa linea
                 service = GetServiceCoordP1P2()
             stats.t.completion_coord = stats.t.current + service
             stats.area_coord.service += service
@@ -133,6 +138,8 @@ def return_stats(stats, t, seed):
         'cloud_avg_wait': stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0,
         'coord_avg_wait': stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0,
         'count_E': stats.count_E,
+        'count_E_P1P2': stats.count_E_P1P2,  # Aggiungi questi
+        'count_E_P3P4': stats.count_E_P3P4,  # due nuovi campi
         'count_C': stats.count_C,
         'E_utilization': stats.area_E.service / t if t > 0 else 0,
         'C_utilization': stats.area_C.service / t if t > 0 else 0,

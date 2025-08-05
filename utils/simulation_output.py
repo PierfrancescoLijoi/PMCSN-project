@@ -27,6 +27,8 @@ header = [
     "cloud_avg_wait",
     "coord_avg_wait",
     "count_E",
+    "count_E_P1P2",  # Aggiungi questi
+    "count_E_P3P4",  # due nuovi campi
     "count_C",
     "E_utilization",
     "C_utilization"
