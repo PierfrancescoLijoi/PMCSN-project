@@ -6,6 +6,7 @@ from libraries.rngs import selectStream, random as rng_random
 from libraries import rvms
 import utils.constants as cs
 import sys
+
 arrival_temp = cs.START  # variabile globale per il tempo di arrivo corrente
 
 
@@ -26,6 +27,7 @@ def GetLambda(current_time):
             return lam
     return cs.LAMBDA_SLOTS[-1][2]  # default ultima fascia
 
+
 def Exponential(mean):
     """
     Genera un tempo esponenziale con media 'mean'.
@@ -36,6 +38,7 @@ def Exponential(mean):
         raise ValueError("La media deve essere positiva")
     return -mean * math.log(1.0 - rng_random())
 
+
 def LogNormal(mean, sigma=0.25):
     """
     Genera un tempo lognormale con media target 'mean' e deviazione sigma.
@@ -45,19 +48,21 @@ def LogNormal(mean, sigma=0.25):
     mu = math.log(mean) - 0.5 * sigma**2
     return math.exp(mu + sigma * random.gauss(0, 1))
 
-def GetArrival(current_time):
+
+def GetArrival(current_time, forced_lambda=None):
     """
-    Genera il prossimo tempo di arrivo usando il λ(t) corrente (già in secondi).
+    Genera il prossimo tempo di arrivo.
+
+    - Se forced_lambda è specificato, usa sempre quel valore come λ.
+    - Altrimenti calcola λ in base alla fascia oraria corrente.
 
     Riferimento: Sezione 'Modello delle specifiche'.
     """
     global arrival_temp
-    lam = GetLambda(current_time)  # λ già in job/secondo
+    lam = forced_lambda if forced_lambda is not None else GetLambda(current_time)
     arrival_temp += Exponential(1 / lam)
-    #print(f"[λ={lam:.6f}] Arrivo generato a {arrival_temp:.7f}")
-    #sys.stdout.flush()
-
     return arrival_temp
+
 
 def reset_arrival_temp():
     """
@@ -76,17 +81,21 @@ def GetServiceEdgeE():
     """Servizio per job di classe E all'Edge (Exp(0.5s))"""
     return Exponential(cs.EDGE_SERVICE_E)
 
+
 def GetServiceEdgeC():
     """Servizio per job di classe C all'Edge (Exp(0.1s))"""
     return Exponential(cs.EDGE_SERVICE_C)
+
 
 def GetServiceCloud():
     """Servizio al Cloud (Exp(0.8s), infinite-server)"""
     return Exponential(cs.CLOUD_SERVICE)
 
+
 def GetServiceCoordP1P2():
     """Servizio Coordinator Edge per P1/P2 (Exp(0.25s))"""
     return Exponential(cs.COORD_SERVICE_P1P2)
+
 
 def GetServiceCoordP3P4():
     """Servizio Coordinator Edge per P3/P4 (LogNorm(0.4s))"""
@@ -125,16 +134,15 @@ def calculate_confidence_interval(data):
 # GESTIONE DELLE STATISTICHE
 # -------------------------------
 def append_stats(replicationStats, results, stats):
-    """
-    Aggiunge i risultati di una replica agli array cumulativi.
-
-    Riferimento: gestione dei risultati replicati (analisi statistica).
-    """
     replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))  # nuovo
+    replicationStats.slots.append(results.get('slot'))      # nuovo
+
     replicationStats.edge_wait_times.append(results['edge_avg_wait'])
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
-    # Aggiunta per analisi transiente
+
     replicationStats.edge_wait_interval.append(stats.edge_wait_times)
     replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
     replicationStats.coord_wait_interval.append(stats.coord_wait_times)
+

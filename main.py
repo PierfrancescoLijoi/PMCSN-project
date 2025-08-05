@@ -16,44 +16,47 @@ from utils.simulation_stats import ReplicationStats
 from utils.sim_utils import append_stats
 
 
-def start_finite_simulation():
+def start_lambda_scan_simulation():
     """
-    Avvia la simulazione finita e transiente per il modello standard.
+    Esegue una simulazione per ciascun valore di λ definito in LAMBDA_SLOTS.
 
-    - Riferimento: Sezione 5.1 e 5.2 del documento.
-    - Orizzonte: 24 ore (STOP = 86400 secondi).
-    - Metodo: next-event-driven, esecuzione fino a STOP o fino a svuotare il sistema.
+    - Per ogni λ, esegue N repliche con lo stesso seed pattern.
+    - Ogni simulazione forza il valore di λ, ignorando l’orario corrente.
+    - Salva i risultati su CSV e stampa statistiche aggregate.
     """
 
-    replicationStats = ReplicationStats()  # raccoglie i dati di tutte le repliche
+    replicationStats = ReplicationStats()  # raccoglie i dati di tutte le simulazioni
 
-    print("FINITE STANDARD SIMULATION - Aeroporto Ciampino")
+    print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
 
     # Nome del file CSV per salvare i risultati
-    file_name = "finite_standard_statistics.csv"
+    file_name = "lambda_scan_statistics.csv"
 
     # Pulizia file di output e scrittura intestazione
     clear_file(file_name)
 
-    # Determinazione del tempo di stop
-    if cs.TRANSIENT_ANALYSIS == 1:
-        # Se attiva l’analisi transiente → STOP_ANALYSIS più corto
-        stop = cs.STOP_ANALYSIS
-    else:
-        # Altrimenti simulazione su 24 ore intere
-        stop = cs.STOP
+    # Ciclo su ogni valore di λ definito nello slot
+    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
 
-    # Esecuzione delle repliche
-    for i in range(cs.REPLICATIONS):
-        # Lancio della simulazione
-        results, stats = finite_simulation(stop)
+        print(f"\n➤ Simulazione slot λ[{lam_index}] = {lam:.5f} job/sec")
 
-        # Salvataggio dei risultati su CSV
-        write_file(results, file_name)
+        for rep in range(cs.REPLICATIONS):
+            # Durata simulazione fissa per ogni λ
+            stop = cs.SLOT_DURATION
 
-        # Aggiunta dei risultati alla collezione cumulativa
-        append_stats(replicationStats, results, stats)
+            # Esecuzione simulazione con λ forzato
+            results, stats = finite_simulation(stop, forced_lambda=lam)
 
+            # Salvataggio dei risultati su CSV (con info slot/λ)
+            results['lambda'] = lam
+            results['slot'] = lam_index
+            write_file(results, file_name)
+
+            # Aggiunta dei risultati alla collezione cumulativa
+            append_stats(replicationStats, results, stats)
+
+    # Stampa delle statistiche aggregate finali
+    print_simulation_stats(replicationStats, "lambda_scan")
     # Stampa delle statistiche aggregate
     print_simulation_stats(replicationStats, "replications")
 
@@ -72,8 +75,9 @@ def start_finite_simulation():
     return replicationStats
 
 
+
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
-    stats = start_finite_simulation()
+    stats = start_lambda_scan_simulation()

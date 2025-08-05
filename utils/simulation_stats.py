@@ -79,7 +79,8 @@ class ReplicationStats:
         self.edge_wait_times = []
         self.cloud_wait_times = []
         self.coord_wait_times = []
-
+        self.lambdas = []  # nuovo campo
+        self.slots = []  # nuovo campo
         self.edge_wait_interval = []
         self.cloud_wait_interval = []
         self.coord_wait_interval = []
