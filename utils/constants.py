@@ -64,12 +64,19 @@ COORD_EDGE_SERVERS = 1
 # -------------------------
 # λ stimati per fasce orarie sulla base dei dati ADR (Tabella \ref{tab:lambda})
 # Ogni tupla = (inizio_fascia_sec, fine_fascia_sec, lambda [job/min])
-LAMBDA_SLOTS = [
+"""LAMBDA_SLOTS = [
     (21600, 36000, 0.26861),   # 06:00 - 09:59
     (36000, 50400, 0.19202),  # 10:00 - 13:59
     (50400, 64800, 0.15348),    # 14:00 - 17:59
     (64800, 79200, 0.09208),    # 18:00 - 21:59
     (79200, 90000, 0.06138)     # 22:00 - 01:00
+]"""
+LAMBDA_SLOTS = [
+    (21600, 36000, 1.880303),   # 06:00 - 09:59 con k=7.0
+    (36000, 50400, 1.343074),  # 10:00 - 13:59
+    (50400, 64800, 1.074459),    # 14:00 - 17:59
+    (64800, 79200, 0.644675),    # 18:00 - 21:59
+    (79200, 90000, 0.429783)     # 22:00 - 01:00
 ]
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 

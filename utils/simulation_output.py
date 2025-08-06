@@ -173,3 +173,45 @@ def plot_multi_lambda_per_seed(wait_times, seeds, name, sim_type, lambdas, slots
         output_path = os.path.join(output_dir, f"{name}_seed{seed}.png")
         plt.savefig(output_path)
         plt.close()
+def plot_multi_seed_per_lambda(wait_times, seeds, name, sim_type, lambdas, slots):
+    """
+    Genera un grafico per ogni λ, confrontando repliche con seed diversi.
+
+    - wait_times: lista di liste [(tempo, attesa), ...] per ogni run
+    - seeds: lista di seed usati
+    - name: centro analizzato (edge_node, cloud_server, ecc.)
+    - sim_type: tipo di simulazione (es. lambda_scan)
+    - lambdas: lista dei λ usati
+    - slots: lista degli indici slot
+    """
+
+    output_dir = os.path.join(file_path, "plot", "multi_seed", sim_type)
+    os.makedirs(output_dir, exist_ok=True)
+
+    # Raggruppo per λ
+    lambda_to_runs = {}
+    for idx, lam in enumerate(lambdas):
+        if not wait_times[idx]:
+            continue
+        if lam not in lambda_to_runs:
+            lambda_to_runs[lam] = []
+        lambda_to_runs[lam].append((seeds[idx], slots[idx], wait_times[idx]))
+
+    # Creo un grafico per ogni λ
+    for lam, runs in lambda_to_runs.items():
+        plt.figure(figsize=(10, 6))
+
+        for seed, slot, response_times in runs:
+            times = [pt[0] for pt in response_times]
+            avg_response_times = [pt[1] for pt in response_times]
+            plt.plot(times, avg_response_times, label=f"Seed {seed} (Slot {slot})")
+
+        plt.xlabel("Time (s)")
+        plt.ylabel("Average wait time (s)")
+        plt.title(f"Multi-seed Analysis - {name} | λ={lam:.4f}")
+        plt.legend()
+        plt.grid(True)
+
+        output_path = os.path.join(output_dir, f"{name}_lambda{lam:.4f}.png")
+        plt.savefig(output_path)
+        plt.close()

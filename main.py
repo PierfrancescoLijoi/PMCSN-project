@@ -11,68 +11,94 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 
 import utils.constants as cs
 from simulation.simulator import finite_simulation
-from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis
+from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
+    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda
 from utils.simulation_stats import ReplicationStats
 from utils.sim_utils import append_stats
 
 
+from libraries.rngs import plantSeeds, selectStream, getSeed
+
 def start_lambda_scan_simulation():
-    """
-    Esegue una simulazione per ciascun valore di λ definito in LAMBDA_SLOTS.
-
-    - Per ogni λ, esegue N repliche con lo stesso seed pattern.
-    - Ogni simulazione forza il valore di λ, ignorando l’orario corrente.
-    - Salva i risultati su CSV e stampa statistiche aggregate.
-    """
-
-    replicationStats = ReplicationStats()  # raccoglie i dati di tutte le simulazioni
-
+    replicationStats = ReplicationStats()
     print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
 
-    # Nome del file CSV per salvare i risultati
     file_name = "lambda_scan_statistics.csv"
-
-    # Pulizia file di output e scrittura intestazione
     clear_file(file_name)
 
-    # Ciclo su ogni valore di λ definito nello slot
-    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+    # Ciclo sulle repliche
+    for rep in range(cs.REPLICATIONS):
+        # Inizializza il seed per questa replica
+        plantSeeds(cs.SEED + rep)
+        base_seed = getSeed()
+        print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
 
-        print(f"\n➤ Simulazione slot λ[{lam_index}] = {lam:.5f} job/sec")
+        # Ciclo su tutti i λ
+        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+            print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
 
-        for rep in range(cs.REPLICATIONS):
-            # Durata simulazione fissa per ogni λ
             stop = cs.SLOT_DURATION
-
-            # Esecuzione simulazione con λ forzato
             results, stats = finite_simulation(stop, forced_lambda=lam)
 
-            # Salvataggio dei risultati su CSV (con info slot/λ)
             results['lambda'] = lam
             results['slot'] = lam_index
+            results['seed'] = base_seed  # forza stesso seed nel CSV
             write_file(results, file_name)
 
-            # Aggiunta dei risultati alla collezione cumulativa
             append_stats(replicationStats, results, stats)
 
-    # Stampa delle statistiche aggregate finali
     print_simulation_stats(replicationStats, "lambda_scan")
-    # Stampa delle statistiche aggregate
     print_simulation_stats(replicationStats, "replications")
 
-    # Se attiva analisi transiente → genera grafici temporali
     if cs.TRANSIENT_ANALYSIS == 1:
-        plot_analysis(replicationStats.edge_wait_interval,
-                      replicationStats.seeds,
-                      "edge_node", "standard")
-        plot_analysis(replicationStats.cloud_wait_interval,
-                      replicationStats.seeds,
-                      "cloud_server", "standard")
-        plot_analysis(replicationStats.coord_wait_interval,
-                      replicationStats.seeds,
-                      "coord_server_edge", "standard")
+        # Analisi per seed (già implementata)
+        plot_multi_lambda_per_seed(
+            replicationStats.edge_wait_interval,
+            replicationStats.seeds,
+            "edge_node", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_lambda_per_seed(
+            replicationStats.cloud_wait_interval,
+            replicationStats.seeds,
+            "cloud_server", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_lambda_per_seed(
+            replicationStats.coord_wait_interval,
+            replicationStats.seeds,
+            "coord_server_edge", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+
+        # Analisi per λ
+        plot_multi_seed_per_lambda(
+            replicationStats.edge_wait_interval,
+            replicationStats.seeds,
+            "edge_node", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_seed_per_lambda(
+            replicationStats.cloud_wait_interval,
+            replicationStats.seeds,
+            "cloud_server", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_seed_per_lambda(
+            replicationStats.coord_wait_interval,
+            replicationStats.seeds,
+            "coord_server_edge", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
 
     return replicationStats
+
 
 
 
