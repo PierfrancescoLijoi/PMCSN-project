@@ -1,7 +1,8 @@
 # simulation/simulator.py
 
 from utils.sim_utils import *
-from utils.simulation_stats import SimulationStats
+from utils.simulation_output import write_file, plot_analysis
+from utils.simulation_stats import SimulationStats, ReplicationStats
 import utils.constants as cs
 from libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_random
 
@@ -28,6 +29,69 @@ def finite_simulation(stop, forced_lambda=None):
 
     stats.calculate_area_queue()
     return return_stats(stats, stats.t.current, seed), stats
+
+def infinite_simulation(forced_lambda=None):
+    """
+    Simulazione a orizzonte infinito (batch-means) per stimare il regime stazionario.
+    - forced_lambda: se specificato, usa quel λ fisso invece di GetLambda().
+    - sim_type: etichetta usata per salvare i grafici.
+    """
+    seeds = []
+    wait_times_edge, wait_times_cloud, wait_times_coord = [], [], []
+    batch_stats = ReplicationStats()
+    stats = SimulationStats()
+    stats.reset(cs.START)
+
+    seed = getSeed()
+    seeds.append(seed)
+    start_time = 0
+    results_list = []
+
+    while len(batch_stats.edge_wait_times) < cs.K:
+        # esegue il batch fino a B job
+        while stats.job_arrived < cs.B:
+            execute(stats, cs.STOP_INFINITE, forced_lambda)
+
+        stop_time = stats.t.current - start_time
+        start_time = stats.t.current
+
+        # calcolo aree batch
+        stats.calculate_area_queue()
+        results = return_stats(stats, stop_time, seed)
+
+        # salvataggio risultati batch
+        results_list.append(results)
+        append_stats(batch_stats, results, stats)
+
+        # registra andamento per grafici
+        avg_edge = results['edge_avg_wait']
+        avg_cloud = results['cloud_avg_wait']
+        avg_coord = results['coord_avg_wait']
+
+        if len(wait_times_edge) < len(seeds):
+            wait_times_edge.append([])
+            wait_times_cloud.append([])
+            wait_times_coord.append([])
+
+        wait_times_edge[-1].append((stats.t.current, avg_edge))
+        wait_times_cloud[-1].append((stats.t.current, avg_cloud))
+        wait_times_coord[-1].append((stats.t.current, avg_coord))
+
+        # reset parziale per batch successivo
+        stats.reset_infinite()
+
+    # scarta batch iniziali per rimuovere il transitorio
+    remove_batch(batch_stats, 25)
+
+    # plot analisi transiente
+    plot_analysis(wait_times_edge, seeds, "edge_node", "standard")
+    plot_analysis(wait_times_cloud, seeds, "cloud_server", "standard")
+    plot_analysis(wait_times_coord, seeds, "coord_server", "standard")
+
+    # attacco lista di risultati all'oggetto batch_stats
+    batch_stats.results = results_list
+    return batch_stats
+
 
 
 def execute(stats, stop, forced_lambda=None):

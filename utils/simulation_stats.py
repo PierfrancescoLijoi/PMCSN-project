@@ -1,4 +1,5 @@
 # utils/simulation_stats.py
+import utils.constants as cs
 
 class Track:
     def __init__(self):
@@ -67,6 +68,51 @@ class SimulationStats:
         self.queue_coord_low.clear()
         self.count_E = 0  # Reset del contatore E
         self.count_C = 0  # Reset del contatore C
+
+    def reset_infinite(self):
+        """
+        Reset delle statistiche per la simulazione a orizzonte infinito (batch-means).
+        Non resetta il tempo globale, ma azzera contatori e aree accumulate nel batch.
+        """
+        # contatori arrivi/completamenti
+        self.job_arrived = 0
+
+        self.index_edge = 0
+        self.index_cloud = 0
+        self.index_coord = 0
+
+        self.count_E = 0
+        self.count_C = 0
+
+        self.count_E_P1 = 0
+        self.count_E_P2 = 0
+        self.count_E_P3 = 0
+        self.count_E_P4 = 0
+
+        self.index_E = 0
+        self.index_C = 0
+
+        # aree accumulate (batch corrente)
+        self.area_edge = Track()
+        self.area_cloud = Track()
+        self.area_coord = Track()
+        self.area_E = Track()
+        self.area_C = Track()
+
+        # code: svuotiamo per garantire indipendenza tra batch
+        self.queue_edge = []
+        self.queue_coord_low = []
+        self.queue_coord_high = []
+
+        # numero di job in servizio/attesa
+        self.number_edge = 0
+        self.number_cloud = 0
+        self.number_coord = 0
+
+        # tempi di completamento (nessun job in corso)
+        self.t.completion_edge = cs.INFINITY
+        self.t.completion_cloud = cs.INFINITY
+        self.t.completion_coord = cs.INFINITY
 
     def calculate_area_queue(self):
         self.area_edge.queue = self.area_edge.node - self.area_edge.service

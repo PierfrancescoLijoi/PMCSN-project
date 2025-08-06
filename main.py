@@ -10,7 +10,7 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 """
 
 import utils.constants as cs
-from simulation.simulator import finite_simulation
+from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
     plot_multi_lambda_per_seed, plot_multi_seed_per_lambda
 from utils.simulation_stats import ReplicationStats
@@ -99,11 +99,42 @@ def start_lambda_scan_simulation():
 
     return replicationStats
 
+def start_infinite_lambda_scan_simulation():
+    print("\nINFINITE SIMULATION - Aeroporto Ciampino")
 
+    file_name = "infinite_statistics.csv"
+    clear_file(file_name)
+
+    replicationStats = ReplicationStats()
+
+    for rep in range(cs.REPLICATIONS):
+        plantSeeds(cs.SEED + rep)
+        base_seed = getSeed()
+        print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
+
+        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+            print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
+
+            batch_stats = infinite_simulation(forced_lambda=lam)
+
+            # arricchisci i risultati di ogni batch
+            for batch_index, results in enumerate(batch_stats.results):
+                results['lambda'] = lam
+                results['slot'] = lam_index
+                results['seed'] = base_seed
+                write_file(results, file_name)
+
+                append_stats(replicationStats, results, batch_stats)
+
+    print_simulation_stats(replicationStats, "lambda_scan_infinite")
+    print_simulation_stats(replicationStats, "replications")
+
+    return replicationStats
 
 
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
-    stats = start_lambda_scan_simulation()
+    stats_finite = start_lambda_scan_simulation()
+    stats_infinite = start_infinite_lambda_scan_simulation()
