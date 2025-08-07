@@ -37,8 +37,76 @@ header = [
     "E_utilization",
     "C_utilization"
 ]
+import json  # Assicurati che sia importato all'inizio del file
+
+import json  # Assicurati che sia in cima al file
+
+import json
+
+header_edge_scalability = [
+    "seed", "lambda", "slot",
+    "edge_server_number",
+    "edge_avg_wait",
+    "edge_avg_delay",
+    "edge_server_service",
+    "edge_server_utilization",
+    "edge_weight_utilization",
+    "server_utilization_by_count"  # nuovo campo JSON
+]
+
+def write_file_edge_scalability(results, file_name):
+    """
+    Scrive i risultati principali della simulazione edge scalability nel CSV.
+    Includendo il dizionario di utilizzo per server come JSON stringificato.
+    """
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+
+    results_serialized = results.copy()
+
+    # Converti il dizionario in stringa JSON compatta
+    if "server_utilization_by_count" in results_serialized:
+        results_serialized["server_utilization_by_count"] = json.dumps(
+            results_serialized["server_utilization_by_count"], separators=(',', ':')
+        )
+
+    # Rimuovi altri campi inutili dal dizionario
+    for key in ["scalability_trace", "edge_servers"]:
+        if key in results_serialized:
+            del results_serialized[key]
+
+    file_exists = os.path.isfile(path)
+
+    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=header_edge_scalability)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(results_serialized)
 
 
+file_path = "output/"  # assicurati che questa variabile sia definita
+
+
+def clear_edge_scalability_file(file_name):
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=header_edge_scalability)
+        writer.writeheader()
+
+def write_scalability_trace(trace, seed, lam, slot):
+    path = os.path.join(file_path, "edge_scalability_statistics.csv")
+    os.makedirs(file_path, exist_ok=True)
+
+    header = ["seed", "lambda", "slot", "time", "edge_servers", "E_utilization"]
+    file_exists = os.path.isfile(path)
+
+    with open(path, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(header)
+        for time, servers, utilization in trace:
+            writer.writerow([seed, lam, slot, time, servers, utilization])
 
 def clear_file(file_name):
     """
@@ -69,30 +137,32 @@ def write_file(results, file_name):
 def print_simulation_stats(stats, type):
     """
     Stampa le statistiche aggregate dopo tutte le repliche.
-
-    - Usa la media delle repliche.
-    - Calcola anche l’intervallo di confidenza al 95%.
-    - Riferimento: Obiettivi 1 e 2 → garantire tempi medi di risposta < 3s
     """
+
     print(f"\nStats after {cs.REPLICATIONS} replications:")
 
     # Edge Node
-    mean_edge, ci_edge = calculate_confidence_interval(stats.edge_wait_times)
-    print(f"Edge Node - Average wait time: {mean_edge:.6f} ± {ci_edge:.6f}")
+    if stats.edge_wait_times:
+        mean_edge, ci_edge = calculate_confidence_interval(stats.edge_wait_times)
+        print(f"Edge Node - Average wait time: {mean_edge:.6f} ± {ci_edge:.6f}")
 
     # Cloud Server
-    mean_cloud, ci_cloud = calculate_confidence_interval(stats.cloud_wait_times)
-    print(f"Cloud Server - Average wait time: {mean_cloud:.6f} ± {ci_cloud:.6f}")
+    if stats.cloud_wait_times:
+        mean_cloud, ci_cloud = calculate_confidence_interval(stats.cloud_wait_times)
+        print(f"Cloud Server - Average wait time: {mean_cloud:.6f} ± {ci_cloud:.6f}")
 
     # Coordinator Edge
-    mean_coord, ci_coord = calculate_confidence_interval(stats.coord_wait_times)
-    print(f"Coordinator Edge - Average wait time: {mean_coord:.6f} ± {ci_coord:.6f}")
+    if stats.coord_wait_times:
+        mean_coord, ci_coord = calculate_confidence_interval(stats.coord_wait_times)
+        print(f"Coordinator Edge - Average wait time: {mean_coord:.6f} ± {ci_coord:.6f}")
 
-    # Totali job elaborati (usando count veri, non lunghezza liste)
-    total_E = sum(stats.total_count_E) if hasattr(stats, 'total_count_E') else len(stats.edge_wait_times)
-    total_C = sum(stats.total_count_C) if hasattr(stats, 'total_count_C') else len(stats.cloud_wait_times)
-    print(f"\nTotal jobs E processed: {total_E}")
-    print(f"Total jobs C processed: {total_C}")
+    # Totali job elaborati
+    if hasattr(stats, 'total_count_E'):
+        total_E = sum(stats.total_count_E)
+        print(f"\nTotal jobs E processed: {total_E}")
+    if hasattr(stats, 'total_count_C'):
+        total_C = sum(stats.total_count_C)
+        print(f"Total jobs C processed: {total_C}")
 
 
 def plot_analysis(wait_times, seeds, name, sim_type):

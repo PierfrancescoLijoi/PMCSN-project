@@ -10,7 +10,23 @@ import sys
 from utils.simulation_stats import Track
 
 arrival_temp = cs.START  # variabile globale per il tempo di arrivo corrente
+import statistics
+from math import sqrt
+from statistics import StatisticsError
+from decimal import Decimal
+from fractions import Fraction
 
+
+def safe_stdev(data, xbar=None):
+    """Calcolo della deviazione standard campionaria senza usare statistics.stdev"""
+    data = list(map(float, data))  # forza valori float
+    n = len(data)
+    if n < 2:
+        raise StatisticsError("safe_stdev requires at least two data points")
+
+    mean = xbar if xbar is not None else sum(data) / n
+    variance = sum((x - mean) ** 2 for x in data) / (n - 1)
+    return sqrt(variance)
 
 # -------------------------------
 # ARRIVI - processo di Poisson non omogeneo (in secondi)
@@ -108,8 +124,9 @@ def GetServiceCoordP3P4():
 # SUPPORTO EVENT-DRIVEN
 # -------------------------------
 def Min(*args):
-    """Trova il minimo ignorando gli infiniti (usato per decidere il prossimo evento)."""
-    return min(a for a in args if a != float("inf"))
+    finite_values = [a for a in args if a != float("inf")]
+    return min(finite_values) if finite_values else float("inf")
+
 
 
 def remove_batch(stats, n):
@@ -168,21 +185,15 @@ def reset_infinite(self):
 # -------------------------------
 # INTERVALLI DI CONFIDENZA
 # -------------------------------
-def calculate_confidence_interval(data):
-    """
-    Calcola il margine di errore (±) per l'intervallo di confidenza al 95%.
+def calculate_confidence_interval(data, confidence=0.95):
+    data = list(map(float, data))  # ← forza i float
+    if len(data) < 2:
+        return 0.0, 0.0  # oppure raise ValueError
 
-    Riferimento: Sezione 'Modello computazionale'.
-    """
-    n = len(data)
-    if n <= 1:
-        return statistics.mean(data), 0.0
-
-    mean_val = statistics.mean(data)
-    stdev = statistics.stdev(data)
-    t_star = rvms.idfStudent(n - 1, 1 - cs.ALPHA / 2)
-    margin_of_error = t_star * stdev / math.sqrt(n)
-    return mean_val, margin_of_error
+    mean = statistics.mean(data)
+    stdev = safe_stdev(data)
+    margin = 1.96 * (stdev / (len(data) ** 0.5))  # z=1.96 per 95%
+    return mean, margin
 
 
 # -------------------------------
@@ -201,3 +212,9 @@ def append_stats(replicationStats, results, stats):
     replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
     replicationStats.coord_wait_interval.append(stats.coord_wait_times)
 
+def append_edge_scalability_stats(replicationStats, results, stats):
+    replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
+    replicationStats.edge_wait_times.append(results['edge_avg_wait'])
+    replicationStats.edge_wait_interval.append(stats.edge_wait_times)

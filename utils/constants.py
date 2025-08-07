@@ -12,7 +12,7 @@ nel documento PMCSN Project (Luglio 2025).
 # -------------------------
 SEED = 123456789
 # Numero di repliche per stimare le metriche (Sezione 5.2 - batch means e replicazioni)
-REPLICATIONS = 10
+REPLICATIONS = 100
 
 
 # -------------------------
@@ -57,26 +57,25 @@ EDGE_SERVERS = 1
 CLOUD_SERVERS = float("inf")
 # Un singolo Coordinator Server Edge (Sezione "Coordinator Server Edge")
 COORD_EDGE_SERVERS = 1
+# Numero massimo server scalabili
+EDGE_SERVERS_MAX = 6 # Numero massimo di server Edge (per scalabilità)
 
+
+# Valori soglia per scalabilità
+UTILIZATION_UPPER = 0.8  # aggiunta server sopra 80% utilizzo
+UTILIZATION_LOWER = 0.3  # rimozione server sotto 30% utilizzo
 
 # -------------------------
 # Parametri di arrivo (Poisson non omogeneo)
 # -------------------------
 # λ stimati per fasce orarie sulla base dei dati ADR (Tabella \ref{tab:lambda})
 # Ogni tupla = (inizio_fascia_sec, fine_fascia_sec, lambda [job/min])
-"""LAMBDA_SLOTS = [
-    (21600, 36000, 0.26861),   # 06:00 - 09:59
-    (36000, 50400, 0.19202),  # 10:00 - 13:59
-    (50400, 64800, 0.15348),    # 14:00 - 17:59
-    (64800, 79200, 0.09208),    # 18:00 - 21:59
-    (79200, 90000, 0.06138)     # 22:00 - 01:00
-]"""
 LAMBDA_SLOTS = [
     (21600, 36000, 1.880303),   # 06:00 - 09:59 con k=7.0
     (36000, 50400, 1.343074),  # 10:00 - 13:59
     (50400, 64800, 1.074459),    # 14:00 - 17:59
     (64800, 79200, 0.644675),    # 18:00 - 21:59
-    (79200, 90000, 0.429783)     # 22:00 - 01:00
+    (79200, 90000, 0.429783)     # 22:00 - 02:00
 ]
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 

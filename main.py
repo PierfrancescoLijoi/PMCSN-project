@@ -12,10 +12,13 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 import utils.constants as cs
 from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
-    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda
+    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, write_scalability_trace
 from utils.simulation_stats import ReplicationStats
 from utils.sim_utils import append_stats
-
+from simulation.edge_scalability_simulator import edge_scalability_simulation
+from utils.simulation_output import write_file_edge_scalability, clear_edge_scalability_file
+from utils.sim_utils import append_edge_scalability_stats
+from utils.simulation_stats import ReplicationStats
 
 from libraries.rngs import plantSeeds, selectStream, getSeed
 
@@ -132,9 +135,43 @@ def start_infinite_lambda_scan_simulation():
     return replicationStats
 
 
+def start_edge_scalability_simulation():
+    replicationStats = ReplicationStats()
+    file_name = "edge_scalability_statistics.csv"
+    clear_edge_scalability_file(file_name)
+
+    print("EDGE SCALABILITY SIMULATION")
+
+    for rep in range(cs.REPLICATIONS):
+        print(f"\n★ Replica {rep + 1}")
+        plantSeeds(cs.SEED + rep)
+        seed = getSeed()
+
+        for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+            print(f" ➔ Slot {slot_index} - λ = {lam:.5f} job/sec")
+
+            stop = cs.SLOT_DURATION
+            results, stats = edge_scalability_simulation(stop, forced_lambda=lam, slot_index=slot_index)
+
+            results['seed'] = seed
+            results['lambda'] = lam
+            results['slot'] = slot_index
+
+            write_file_edge_scalability(results, file_name)
+
+
+            append_edge_scalability_stats(replicationStats, results, stats)
+
+    print_simulation_stats(replicationStats, "edge_scalability")
+
+    return replicationStats
+
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
     stats_finite = start_lambda_scan_simulation()
+
+    start_edge_scalability_simulation()
+
     stats_infinite = start_infinite_lambda_scan_simulation()
