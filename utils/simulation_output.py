@@ -134,29 +134,38 @@ def write_file(results, file_name):
         writer.writerow(results)
 
 
-def print_simulation_stats(stats, type):
+def print_simulation_stats(stats, sim_type):
     """
-    Stampa le statistiche aggregate dopo tutte le repliche.
+    Stampa un riepilogo delle statistiche di simulazione.
+    - Per l'orizzonte finito: mostra le medie e intervalli di confidenza dopo N repliche.
+    - Per l'orizzonte infinito: mostra le medie e intervalli di confidenza calcolati sui batch.
     """
+    is_infinite = sim_type in ("lambda_scan_infinite", "infinite", "infinite_horizon")
 
-    print(f"\nStats after {cs.REPLICATIONS} replications:")
+    if is_infinite:
+        print("\n=== Infinite Horizon Simulation - Batch Means Summary ===")
+    else:
+        print(f"\nStats after {cs.REPLICATIONS} replications:")
 
     # Edge Node
     if stats.edge_wait_times:
         mean_edge, ci_edge = calculate_confidence_interval(stats.edge_wait_times)
-        print(f"Edge Node - Average wait time: {mean_edge:.6f} ± {ci_edge:.6f}")
+        label = "Edge Node - Average wait time"
+        print(f"{label}: {mean_edge:.6f} ± {ci_edge:.6f}")
 
     # Cloud Server
     if stats.cloud_wait_times:
         mean_cloud, ci_cloud = calculate_confidence_interval(stats.cloud_wait_times)
-        print(f"Cloud Server - Average wait time: {mean_cloud:.6f} ± {ci_cloud:.6f}")
+        label = "Cloud Server - Average wait time"
+        print(f"{label}: {mean_cloud:.6f} ± {ci_cloud:.6f}")
 
     # Coordinator Edge
     if stats.coord_wait_times:
         mean_coord, ci_coord = calculate_confidence_interval(stats.coord_wait_times)
-        print(f"Coordinator Edge - Average wait time: {mean_coord:.6f} ± {ci_coord:.6f}")
+        label = "Coordinator Edge - Average wait time"
+        print(f"{label}: {mean_coord:.6f} ± {ci_coord:.6f}")
 
-    # Totali job elaborati
+    # Conteggi totali (se presenti)
     if hasattr(stats, 'total_count_E'):
         total_E = sum(stats.total_count_E)
         print(f"\nTotal jobs E processed: {total_E}")

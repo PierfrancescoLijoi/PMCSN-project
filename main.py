@@ -51,7 +51,6 @@ def start_lambda_scan_simulation():
             append_stats(replicationStats, results, stats)
 
     print_simulation_stats(replicationStats, "lambda_scan")
-    print_simulation_stats(replicationStats, "replications")
 
     if cs.TRANSIENT_ANALYSIS == 1:
         # Analisi per seed (già implementata)
@@ -110,29 +109,26 @@ def start_infinite_lambda_scan_simulation():
 
     replicationStats = ReplicationStats()
 
-    for rep in range(cs.REPLICATIONS):
-        plantSeeds(cs.SEED + rep)
-        base_seed = getSeed()
-        print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
+    # un solo seed di base per l’infinite horizon
+    plantSeeds(cs.SEED)
+    base_seed = getSeed()
+    print(f"\n★ Infinite horizon con seed base = {base_seed}")
 
-        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-            print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
+    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+        print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec")
 
-            batch_stats = infinite_simulation(forced_lambda=lam)
+        batch_stats = infinite_simulation(forced_lambda=lam)
 
-            # arricchisci i risultati di ogni batch
-            for batch_index, results in enumerate(batch_stats.results):
-                results['lambda'] = lam
-                results['slot'] = lam_index
-                results['seed'] = base_seed
-                write_file(results, file_name)
-
-                append_stats(replicationStats, results, batch_stats)
+        for batch_index, results in enumerate(batch_stats.results):
+            results['lambda'] = lam
+            results['slot'] = lam_index
+            results['seed'] = base_seed
+            write_file(results, file_name)
+            append_stats(replicationStats, results, batch_stats)
 
     print_simulation_stats(replicationStats, "lambda_scan_infinite")
-    print_simulation_stats(replicationStats, "replications")
-
     return replicationStats
+
 
 
 def start_edge_scalability_simulation():
@@ -171,7 +167,6 @@ if __name__ == "__main__":
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
     stats_finite = start_lambda_scan_simulation()
-
+    stats_infinite = start_infinite_lambda_scan_simulation()
     start_edge_scalability_simulation()
 
-    stats_infinite = start_infinite_lambda_scan_simulation()
