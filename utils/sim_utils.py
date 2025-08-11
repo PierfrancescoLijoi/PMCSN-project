@@ -244,3 +244,11 @@ def append_edge_scalability_stats(replicationStats, results, stats):
     replicationStats.slots.append(results.get('slot'))
     replicationStats.edge_wait_times.append(results['edge_avg_wait'])
     replicationStats.edge_wait_interval.append(stats.edge_wait_times)
+
+def append_coord_scalability_stats(replicationStats, results, stats):
+    replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
+    # tempi del Coordinator (focus)
+    replicationStats.coord_wait_times.append(results['coord_avg_wait'])
+    replicationStats.coord_wait_interval.append(stats.coord_wait_times)

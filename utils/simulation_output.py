@@ -48,11 +48,6 @@ header = [
     "E_utilization","C_utilization"
 ]
 
-import json  # Assicurati che sia importato all'inizio del file
-
-import json  # Assicurati che sia in cima al file
-
-import json
 
 header_edge_scalability = [
     "seed","lambda","slot",
@@ -82,6 +77,37 @@ header_edge_scalability = [
     # dettagli scalabilità
     "server_utilization_by_count"
 ]
+
+header_coord_scalability = [
+    "seed","lambda","slot",
+
+    # Edge (repliche fisse derivate da CSV Edge)
+    "edge_server_number",
+    "edge_avg_wait","edge_avg_delay",
+    "edge_L","edge_Lq",
+    "edge_service_time_mean",
+    "edge_avg_busy_servers",
+    "edge_throughput",
+
+    # Cloud
+    "cloud_avg_wait","cloud_avg_delay",
+    "cloud_L","cloud_Lq",
+    "cloud_service_time_mean",
+    "cloud_avg_busy_servers",
+    "cloud_throughput",
+
+    # Coordinator (SCALABILE)
+    "coord_server_number",
+    "coord_avg_wait","coord_avg_delay",
+    "coord_L","coord_Lq",
+    "coord_service_time_mean",
+    "coord_utilization",
+    "coord_throughput",
+
+    # dettagli scalabilità
+    "server_utilization_by_count"
+]
+
 def _label_for_sim(sim_type: str) -> str:
     """
     Converte il sim_type interno in un'etichetta parlante per nomi file/cartelle.
@@ -92,6 +118,7 @@ def _label_for_sim(sim_type: str) -> str:
         "infinite_horizon": "orizzonte_infinito",
         "lambda_scan_infinite": "orizzonte_infinito",
         "edge_scalability": "scalabilita_edge",
+        "coord_scalability": "scalabilita_coordinator"
     }
     return mapping.get(sim_type, sim_type.replace(" ", "_").lower())
 
@@ -424,3 +451,37 @@ def plot_multi_seed_per_lambda(wait_times, seeds, name, sim_type, lambdas, slots
         output_path = os.path.join(output_dir, f"{name}_lambda{lam:.4f}.png")
         plt.savefig(output_path)
         plt.close()
+
+
+def write_file_coord_scalability(results, file_name):
+    """Scrive i risultati della simulazione Coordinator Scalability nel CSV."""
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+
+    # Copia e serializza i campi complessi
+    results_serialized = results.copy()
+
+    # serializza il dict di utilizzi
+    if "server_utilization_by_count" in results_serialized:
+        results_serialized["server_utilization_by_count"] = json.dumps(
+            results_serialized["server_utilization_by_count"], separators=(',', ':')
+        )
+
+    # ⚠️ rimuovi chiavi non presenti nell'header (come 'scalability_trace')
+    allowed = set(header_coord_scalability)
+    results_serialized = {k: v for k, v in results_serialized.items() if k in allowed}
+
+    file_exists = os.path.isfile(path)
+    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=header_coord_scalability)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(results_serialized)
+
+
+def clear_coord_scalability_file(file_name):
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=header_coord_scalability)
+        writer.writeheader()

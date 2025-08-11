@@ -59,7 +59,7 @@ CLOUD_SERVERS = float("inf")
 COORD_EDGE_SERVERS = 1
 # Numero massimo server scalabili
 EDGE_SERVERS_MAX = 6 # Numero massimo di server Edge (per scalabilità)
-
+COORD_SERVERS_MAX = 6 # Numero massimo di server Coordinator (per scalabilità)
 
 # Valori soglia per scalabilità
 UTILIZATION_UPPER = 0.8  # aggiunta server sopra 80% utilizzo

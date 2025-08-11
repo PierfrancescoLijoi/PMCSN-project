@@ -19,6 +19,14 @@ from simulation.edge_scalability_simulator import edge_scalability_simulation
 from utils.simulation_output import write_file_edge_scalability, clear_edge_scalability_file
 from utils.sim_utils import append_edge_scalability_stats
 from utils.simulation_stats import ReplicationStats
+from utils.simulation_stats import ReplicationStats
+from simulation.coordinator_scalability_simulator import coordinator_scalability_simulation   # ← NEW
+from utils.simulation_output import (
+    write_file_edge_scalability, clear_edge_scalability_file,
+    write_file_coord_scalability, clear_coord_scalability_file      # ← NEW
+)
+from utils.sim_utils import append_edge_scalability_stats, append_coord_scalability_stats     # ← NEW
+
 
 from libraries.rngs import plantSeeds, selectStream, getSeed
 
@@ -129,6 +137,60 @@ def start_infinite_lambda_scan_simulation():
     print_simulation_stats(replicationStats, "lambda_scan_infinite")
     return replicationStats
 
+def start_coord_scalability_simulation():
+    """
+    Coordinator Scalability:
+    - Legge output/edge_scalability_statistics.csv, calcola per ciascun λ la MEDIA dei server Edge usati (per slot).
+    - Usa quella media (arrotondata, min 1) come N fisso di server Edge.
+    - Scala dinamicamente i server del Coordinator con le stesse soglie di utilizzo degli Edge.
+    - Esporta CSV/JSON/TXT come fatto per Edge.
+    """
+    import os
+    import pandas as pd
+    import utils.constants as cs
+    from libraries.rngs import plantSeeds, getSeed
+
+    replicationStats = ReplicationStats()
+    file_name = "coord_scalability_statistics.csv"
+    clear_coord_scalability_file(file_name)
+
+    # carica CSV Edge già generato
+    path_edge_csv = os.path.join("output", "edge_scalability_statistics.csv")
+    if not os.path.isfile(path_edge_csv):
+        raise FileNotFoundError("Non trovo output/edge_scalability_statistics.csv. Esegui prima la scalabilità Edge.")
+
+    df = pd.read_csv(path_edge_csv)
+
+    # media server per slot di λ (robusto a floating di λ)
+    slot_to_avg = df.groupby('slot')['edge_server_number'].mean().to_dict()
+
+    print("COORDINATOR SCALABILITY SIMULATION")
+
+    for rep in range(cs.REPLICATIONS):
+        print(f"\n★ Replica {rep + 1}")
+        plantSeeds(cs.SEED + rep)
+        seed = getSeed()
+
+        for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+            print(f" ➔ Slot {slot_index} - λ = {lam:.5f} job/sec")
+            fixed_edge_servers = max(1, min(int(round(slot_to_avg.get(slot_index, 1))), cs.EDGE_SERVERS_MAX))
+
+            stop = cs.SLOT_DURATION
+            results, stats = coordinator_scalability_simulation(
+                stop, forced_lambda=lam, slot_index=slot_index, fixed_edge_servers=fixed_edge_servers
+            )
+
+            results['seed'] = seed
+            results['lambda'] = lam
+            results['slot'] = slot_index
+
+            write_file_coord_scalability(results, file_name)
+            append_coord_scalability_stats(replicationStats, results, stats)
+
+    from utils.simulation_output import print_simulation_stats
+    print_simulation_stats(replicationStats, "coord_scalability")
+
+    return replicationStats
 
 
 def start_edge_scalability_simulation():
@@ -241,4 +303,5 @@ if __name__ == "__main__":
     stats_finite = start_lambda_scan_simulation()
     stats_infinite = start_infinite_lambda_scan_simulation()
     start_edge_scalability_simulation()
+    start_coord_scalability_simulation()
 
