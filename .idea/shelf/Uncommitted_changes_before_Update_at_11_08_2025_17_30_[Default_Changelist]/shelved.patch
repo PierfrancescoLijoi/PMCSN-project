@@ -1,0 +1,692 @@
+Index: simulation/edge_scalability_simulator.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+># MODIFICHE COMPLETE A edge_scalability_simulation.py PER SUPPORTARE:\r\n# - Server paralleli: traffico smistato tra più nodi Edge attivi\r\n# - Scaling dinamico basato su utilizzo aggregato ogni 1000s\r\n# - Misurazione per server attivi da 1 a EDGE_SERVERS_MAX\r\n\r\nfrom utils.sim_utils import *\r\nfrom utils.simulation_stats import SimulationStats\r\nimport utils.constants as cs\r\nfrom libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_random\r\n\r\nplantSeeds(cs.SEED)\r\n\r\ndef edge_scalability_simulation(stop, forced_lambda=None, slot_index=None):\r\n    seed = getSeed()\r\n    reset_arrival_temp()\r\n    cs.EDGE_SERVERS = 1\r\n\r\n    stats = SimulationStats()\r\n    stats.reset(cs.START)\r\n    stats.t.arrival = GetArrival(stats.t.current, forced_lambda)\r\n\r\n    interval = 1000\r\n    last_checkpoint = stats.t.current\r\n\r\n    server_util_data = {i: {\"active_time\": 0.0, \"area_service\": 0.0} for i in range(1, cs.EDGE_SERVERS_MAX + 1)}\r\n    scalability_trace = []\r\n\r\n    edge_completion_times = [cs.INFINITY] * cs.EDGE_SERVERS_MAX\r\n    edge_server_busy = [False] * cs.EDGE_SERVERS_MAX\r\n\r\n    while stats.t.arrival < stop or stats.number_edge + stats.number_cloud + stats.number_coord > 0:\r\n        next_completion_edge = min(edge_completion_times[:cs.EDGE_SERVERS])\r\n        stats.t.next = Min(stats.t.arrival, next_completion_edge, stats.t.completion_cloud, stats.t.completion_coord)\r\n        delta = stats.t.next - stats.t.current\r\n\r\n        if stats.number_edge > 0:\r\n            stats.area_edge.node += delta * stats.number_edge\r\n        if stats.number_cloud > 0:\r\n            stats.area_cloud.node += delta * stats.number_cloud\r\n        if stats.number_coord > 0:\r\n            stats.area_coord.node += delta * stats.number_coord\r\n\r\n        # Corretto: attivo tutti i server, e accumulo area_service solo se occupati\r\n        for i in range(cs.EDGE_SERVERS):\r\n            server_util_data[i + 1][\"active_time\"] += delta\r\n            if edge_server_busy[i]:\r\n                server_util_data[i + 1][\"area_service\"] += delta\r\n\r\n        stats.t.current = stats.t.next\r\n\r\n        if stats.t.current - last_checkpoint >= interval:\r\n            total_service = sum(server_util_data[i + 1][\"area_service\"] for i in range(cs.EDGE_SERVERS))\r\n            total_time = sum(server_util_data[i + 1][\"active_time\"] for i in range(cs.EDGE_SERVERS))\r\n            utilization = total_service / total_time if total_time > 0 else 0\r\n            scalability_trace.append((stats.t.current, cs.EDGE_SERVERS, utilization))\r\n\r\n            if utilization > cs.UTILIZATION_UPPER and cs.EDGE_SERVERS < cs.EDGE_SERVERS_MAX:\r\n                cs.EDGE_SERVERS += 1\r\n            elif utilization < cs.UTILIZATION_LOWER and cs.EDGE_SERVERS > 1:\r\n                cs.EDGE_SERVERS -= 1\r\n\r\n            last_checkpoint = stats.t.current\r\n\r\n        if stats.t.current == stats.t.arrival:\r\n            stats.job_arrived += 1\r\n            stats.number_edge += 1\r\n            stats.number_E += 1\r\n            stats.queue_edge.append(\"E\")\r\n            stats.t.arrival = GetArrival(stats.t.current, forced_lambda)\r\n            if stats.t.arrival > stop:\r\n                stats.t.arrival = cs.INFINITY\r\n\r\n            for i in range(cs.EDGE_SERVERS):\r\n                if not edge_server_busy[i]:\r\n                    job = stats.queue_edge.pop(0)\r\n                    service = GetServiceEdgeE() if job == \"E\" else GetServiceEdgeC()\r\n                    edge_completion_times[i] = stats.t.current + service\r\n                    edge_server_busy[i] = True\r\n                    stats.area_edge.service += service\r\n                    if job == \"E\":\r\n                        stats.area_E.service += service\r\n                    break\r\n\r\n        for i in range(cs.EDGE_SERVERS):\r\n            if stats.t.current == edge_completion_times[i]:\r\n                edge_server_busy[i] = False\r\n                edge_completion_times[i] = cs.INFINITY\r\n                stats.index_edge += 1\r\n                stats.number_edge -= 1\r\n\r\n                job_type = \"E\"\r\n                if stats.queue_edge:\r\n                    job_type = stats.queue_edge.pop(0)\r\n\r\n                    if job_type == \"E\":\r\n                        selectStream(3)\r\n                        rand_val = rng_random()\r\n                        if rand_val < cs.P_C:\r\n                            stats.number_cloud += 1\r\n                            if stats.number_cloud == 1:\r\n                                service = GetServiceCloud()\r\n                                stats.t.completion_cloud = stats.t.current + service\r\n                                stats.area_cloud.service += service\r\n                                stats.area_C.service += service\r\n                        else:\r\n                            stats.number_coord += 1\r\n                            coord_rand = (rand_val - cs.P_C) / (1 - cs.P_C)\r\n                            if coord_rand < cs.P1_PROB:\r\n                                stats.queue_coord_low.append(\"P1\")\r\n                            elif coord_rand < cs.P1_PROB + cs.P2_PROB:\r\n                                stats.queue_coord_low.append(\"P2\")\r\n                            elif coord_rand < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:\r\n                                stats.queue_coord_high.append(\"P3\")\r\n                            else:\r\n                                stats.queue_coord_high.append(\"P4\")\r\n\r\n                            if stats.number_coord == 1:\r\n                                service = GetServiceCoordP3P4() if stats.queue_coord_high else GetServiceCoordP1P2()\r\n                                stats.t.completion_coord = stats.t.current + service\r\n                                stats.area_coord.service += service\r\n                    else:\r\n                        stats.count_C += 1\r\n\r\n                    service = GetServiceEdgeE() if job_type == \"E\" else GetServiceEdgeC()\r\n                    edge_completion_times[i] = stats.t.current + service\r\n                    edge_server_busy[i] = True\r\n                    stats.area_edge.service += service\r\n                    if job_type == \"E\":\r\n                        stats.area_E.service += service\r\n                break\r\n\r\n        if stats.t.current == stats.t.completion_cloud:\r\n            stats.index_cloud += 1\r\n            stats.number_cloud -= 1\r\n            if stats.number_cloud > 0:\r\n                service = GetServiceCloud()\r\n                stats.t.completion_cloud = stats.t.current + service\r\n                stats.area_cloud.service += service\r\n            else:\r\n                stats.t.completion_cloud = cs.INFINITY\r\n\r\n            stats.number_edge += 1\r\n            stats.queue_edge.append(\"C\")\r\n\r\n        if stats.t.current == stats.t.completion_coord:\r\n            stats.index_coord += 1\r\n            stats.number_coord -= 1\r\n            if stats.queue_coord_high:\r\n                stats.queue_coord_high.pop(0)\r\n                stats.count_E += 1\r\n            elif stats.queue_coord_low:\r\n                stats.queue_coord_low.pop(0)\r\n                stats.count_E += 1\r\n            # else: nessun job da rimuovere → inconsistenza, ma non crashiamo\r\n\r\n            if stats.number_coord > 0:\r\n                service = GetServiceCoordP3P4() if stats.queue_coord_high else GetServiceCoordP1P2()\r\n                stats.t.completion_coord = stats.t.current + service\r\n                stats.area_coord.service += service\r\n            else:\r\n                stats.t.completion_coord = cs.INFINITY\r\n\r\n    stats.calculate_area_queue()\r\n\r\n    per_server_utilization = {}\r\n    for s in range(1, cs.EDGE_SERVERS_MAX + 1):\r\n        data = server_util_data[s]\r\n        per_server_utilization[s] = data[\"area_service\"] / data[\"active_time\"] if data[\"active_time\"] > 0 else None\r\n\r\n    return {\r\n        'seed': seed,\r\n        'lambda': forced_lambda,\r\n        'slot': slot_index,\r\n        'edge_avg_wait': stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0,\r\n        'edge_avg_delay': stats.area_edge.queue / stats.index_edge if stats.index_edge > 0 else 0,\r\n        'edge_server_service': stats.area_edge.service / stats.index_edge if stats.index_edge > 0 else 0,\r\n        'edge_server_utilization': stats.area_edge.service / stats.t.current if stats.t.current > 0 else 0,\r\n        'edge_weight_utilization': stats.area_edge.node / (cs.EDGE_SERVERS * stats.t.current) if stats.t.current > 0 else 0,\r\n        'edge_server_number': cs.EDGE_SERVERS,\r\n        'server_utilization_by_count': per_server_utilization,\r\n        'scalability_trace': scalability_trace\r\n    }, stats\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/simulation/edge_scalability_simulator.py b/simulation/edge_scalability_simulator.py
+--- a/simulation/edge_scalability_simulator.py	(revision 3ea90086ad2ed94b3b09ece069e18a7fbcf2dd39)
++++ b/simulation/edge_scalability_simulator.py	(date 1754926037934)
+@@ -1,8 +1,3 @@
+-# MODIFICHE COMPLETE A edge_scalability_simulation.py PER SUPPORTARE:
+-# - Server paralleli: traffico smistato tra più nodi Edge attivi
+-# - Scaling dinamico basato su utilizzo aggregato ogni 1000s
+-# - Misurazione per server attivi da 1 a EDGE_SERVERS_MAX
+-
+ from utils.sim_utils import *
+ from utils.simulation_stats import SimulationStats
+ import utils.constants as cs
+@@ -13,26 +8,48 @@
+ def edge_scalability_simulation(stop, forced_lambda=None, slot_index=None):
+     seed = getSeed()
+     reset_arrival_temp()
+-    cs.EDGE_SERVERS = 1
++
++    # Almeno 1 server SEMPRE attivo
++    cs.EDGE_SERVERS = max(1, getattr(cs, "EDGE_SERVERS", 1))
+ 
+     stats = SimulationStats()
+     stats.reset(cs.START)
+     stats.t.arrival = GetArrival(stats.t.current, forced_lambda)
+ 
+-    interval = 1000
++    interval = 1000.0
+     last_checkpoint = stats.t.current
+ 
++    # Finestre di misura per utilizzo per ciascun conteggio server (1..MAX)
+     server_util_data = {i: {"active_time": 0.0, "area_service": 0.0} for i in range(1, cs.EDGE_SERVERS_MAX + 1)}
+     scalability_trace = []
+ 
++    # Stato dei server Edge
+     edge_completion_times = [cs.INFINITY] * cs.EDGE_SERVERS_MAX
+-    edge_server_busy = [False] * cs.EDGE_SERVERS_MAX
++    edge_server_busy       = [False]       * cs.EDGE_SERVERS_MAX
++    edge_server_jobtype    = [None]        * cs.EDGE_SERVERS_MAX  # "E" o "C"
++
++    def assign_job_to_server(sidx):
++        """Prova ad assegnare un job dal fronte coda al server sidx (se libero)."""
++        if not edge_server_busy[sidx] and stats.queue_edge:
++            job = stats.queue_edge.pop(0)  # "E" o "C"
++            service = GetServiceEdgeE() if job == "E" else GetServiceEdgeC()
++            edge_completion_times[sidx] = stats.t.current + service
++            edge_server_busy[sidx] = True
++            edge_server_jobtype[sidx] = job
++            stats.area_edge.service += service
++            if job == "E":
++                stats.area_E.service += service
++            return True
++        return False
+ 
+     while stats.t.arrival < stop or stats.number_edge + stats.number_cloud + stats.number_coord > 0:
++        # Prossimo completamento tra i server attivi
+         next_completion_edge = min(edge_completion_times[:cs.EDGE_SERVERS])
+         stats.t.next = Min(stats.t.arrival, next_completion_edge, stats.t.completion_cloud, stats.t.completion_coord)
++
+         delta = stats.t.next - stats.t.current
+ 
++        # Aree numero in nodo (per Little integrali)
+         if stats.number_edge > 0:
+             stats.area_edge.node += delta * stats.number_edge
+         if stats.number_cloud > 0:
+@@ -40,7 +57,7 @@
+         if stats.number_coord > 0:
+             stats.area_coord.node += delta * stats.number_coord
+ 
+-        # Corretto: attivo tutti i server, e accumulo area_service solo se occupati
++        # Accumulo finestra di utilizzo per i server attivi (1..EDGE_SERVERS)
+         for i in range(cs.EDGE_SERVERS):
+             server_util_data[i + 1]["active_time"] += delta
+             if edge_server_busy[i]:
+@@ -48,19 +65,42 @@
+ 
+         stats.t.current = stats.t.next
+ 
++        # Checkpoint finestra utilizzo
+         if stats.t.current - last_checkpoint >= interval:
++            # Utilizzo medio aggregato sui server correnti nell'ULTIMA finestra
+             total_service = sum(server_util_data[i + 1]["area_service"] for i in range(cs.EDGE_SERVERS))
+-            total_time = sum(server_util_data[i + 1]["active_time"] for i in range(cs.EDGE_SERVERS))
+-            utilization = total_service / total_time if total_time > 0 else 0
++            total_time    = sum(server_util_data[i + 1]["active_time"]  for i in range(cs.EDGE_SERVERS))
++            utilization   = (total_service / total_time) if total_time > 0 else 0.0
+             scalability_trace.append((stats.t.current, cs.EDGE_SERVERS, utilization))
+ 
++            # Decisione scaling
+             if utilization > cs.UTILIZATION_UPPER and cs.EDGE_SERVERS < cs.EDGE_SERVERS_MAX:
++                # Scale-up: attiva un nuovo server (idle)
+                 cs.EDGE_SERVERS += 1
++                # Il nuovo server è idle per definizione
++                edge_completion_times[cs.EDGE_SERVERS - 1] = cs.INFINITY
++                edge_server_busy[cs.EDGE_SERVERS - 1] = False
++                edge_server_jobtype[cs.EDGE_SERVERS - 1] = None
++
+             elif utilization < cs.UTILIZATION_LOWER and cs.EDGE_SERVERS > 1:
+-                cs.EDGE_SERVERS -= 1
++                # Scale-down sicuro: spegni solo se gli ultimi server sono TUTTI idle
++                target = cs.EDGE_SERVERS - 1
++                # Possiamo ridurre di 1 solo se il server con indice target è idle
++                # (si procede a piccoli passi per semplicità/robustezza)
++                if not edge_server_busy[target]:
++                    # "Spegni" il server con indice target
++                    edge_completion_times[target] = cs.INFINITY
++                    edge_server_jobtype[target] = None
++                    cs.EDGE_SERVERS = max(1, target + 0)  # nuovo numero attivo
++
++            # Reset finestra per prossimi 1000s
++            for k in range(1, cs.EDGE_SERVERS_MAX + 1):
++                server_util_data[k]["active_time"] = 0.0
++                server_util_data[k]["area_service"] = 0.0
+ 
+             last_checkpoint = stats.t.current
+ 
++        # Eventi: Arrivo
+         if stats.t.current == stats.t.arrival:
+             stats.job_arrived += 1
+             stats.number_edge += 1
+@@ -70,65 +110,65 @@
+             if stats.t.arrival > stop:
+                 stats.t.arrival = cs.INFINITY
+ 
++            # Prova ad assegnare il job in arrivo ad un server libero
+             for i in range(cs.EDGE_SERVERS):
+-                if not edge_server_busy[i]:
+-                    job = stats.queue_edge.pop(0)
+-                    service = GetServiceEdgeE() if job == "E" else GetServiceEdgeC()
+-                    edge_completion_times[i] = stats.t.current + service
+-                    edge_server_busy[i] = True
+-                    stats.area_edge.service += service
+-                    if job == "E":
+-                        stats.area_E.service += service
++                if assign_job_to_server(i):
+                     break
+ 
++        # Eventi: Completamento Edge
++        # (gestiamo al massimo un completamento perché stats.t.next è un singolo istante)
+         for i in range(cs.EDGE_SERVERS):
+             if stats.t.current == edge_completion_times[i]:
++                # Job completato su server i
++                completed_type = edge_server_jobtype[i]  # "E" o "C"
++
++                # Libera il server i
+                 edge_server_busy[i] = False
+                 edge_completion_times[i] = cs.INFINITY
++                edge_server_jobtype[i] = None
++
+                 stats.index_edge += 1
+                 stats.number_edge -= 1
+ 
+-                job_type = "E"
+-                if stats.queue_edge:
+-                    job_type = stats.queue_edge.pop(0)
+-
+-                    if job_type == "E":
+-                        selectStream(3)
+-                        rand_val = rng_random()
+-                        if rand_val < cs.P_C:
+-                            stats.number_cloud += 1
+-                            if stats.number_cloud == 1:
+-                                service = GetServiceCloud()
+-                                stats.t.completion_cloud = stats.t.current + service
+-                                stats.area_cloud.service += service
+-                                stats.area_C.service += service
+-                        else:
+-                            stats.number_coord += 1
+-                            coord_rand = (rand_val - cs.P_C) / (1 - cs.P_C)
+-                            if coord_rand < cs.P1_PROB:
+-                                stats.queue_coord_low.append("P1")
+-                            elif coord_rand < cs.P1_PROB + cs.P2_PROB:
+-                                stats.queue_coord_low.append("P2")
+-                            elif coord_rand < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:
+-                                stats.queue_coord_high.append("P3")
+-                            else:
+-                                stats.queue_coord_high.append("P4")
++                # Routing del job COMPLETATO
++                if completed_type == "E":
++                    # Decide C o Coordinator
++                    selectStream(3)
++                    rand_val = rng_random()
++                    if rand_val < cs.P_C:
++                        # Va al Cloud
++                        stats.number_cloud += 1
++                        if stats.number_cloud == 1:
++                            service = GetServiceCloud()
++                            stats.t.completion_cloud = stats.t.current + service
++                            stats.area_cloud.service += service
++                            stats.area_C.service += service
++                    else:
++                        # Va al Coordinator (classi P1..P4)
++                        stats.number_coord += 1
++                        coord_rand = (rand_val - cs.P_C) / (1.0 - cs.P_C)
++                        if coord_rand < cs.P1_PROB:
++                            stats.queue_coord_low.append("P1")
++                        elif coord_rand < cs.P1_PROB + cs.P2_PROB:
++                            stats.queue_coord_low.append("P2")
++                        elif coord_rand < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:
++                            stats.queue_coord_high.append("P3")
++                        else:
++                            stats.queue_coord_high.append("P4")
+ 
+-                            if stats.number_coord == 1:
+-                                service = GetServiceCoordP3P4() if stats.queue_coord_high else GetServiceCoordP1P2()
+-                                stats.t.completion_coord = stats.t.current + service
+-                                stats.area_coord.service += service
+-                    else:
+-                        stats.count_C += 1
++                        if stats.number_coord == 1:
++                            service = GetServiceCoordP3P4() if stats.queue_coord_high else GetServiceCoordP1P2()
++                            stats.t.completion_coord = stats.t.current + service
++                            stats.area_coord.service += service
++                else:
++                    # completed_type == "C": job ritornato dal Cloud e servito all'Edge
++                    stats.count_C += 1
+ 
+-                    service = GetServiceEdgeE() if job_type == "E" else GetServiceEdgeC()
+-                    edge_completion_times[i] = stats.t.current + service
+-                    edge_server_busy[i] = True
+-                    stats.area_edge.service += service
+-                    if job_type == "E":
+-                        stats.area_E.service += service
+-                break
++                # Assegna un nuovo job (se presente) allo stesso server i
++                assign_job_to_server(i)
++                break  # abbiamo gestito un completamento Edge
+ 
++        # Eventi: Completamento Cloud
+         if stats.t.current == stats.t.completion_cloud:
+             stats.index_cloud += 1
+             stats.number_cloud -= 1
+@@ -139,19 +179,27 @@
+             else:
+                 stats.t.completion_cloud = cs.INFINITY
+ 
++            # Ritorno al nodo Edge come job "C"
+             stats.number_edge += 1
+             stats.queue_edge.append("C")
++            # Se c'è un server libero, assegna subito
++            for i in range(cs.EDGE_SERVERS):
++                if assign_job_to_server(i):
++                    break
+ 
++        # Eventi: Completamento Coordinator
+         if stats.t.current == stats.t.completion_coord:
+             stats.index_coord += 1
+             stats.number_coord -= 1
++
++            # Consuma il job in testa (se presente) dando priorità alta
+             if stats.queue_coord_high:
+                 stats.queue_coord_high.pop(0)
+                 stats.count_E += 1
+             elif stats.queue_coord_low:
+                 stats.queue_coord_low.pop(0)
+                 stats.count_E += 1
+-            # else: nessun job da rimuovere → inconsistenza, ma non crashiamo
++            # altrimenti nessun job da rimuovere; ignora per robustezza
+ 
+             if stats.number_coord > 0:
+                 service = GetServiceCoordP3P4() if stats.queue_coord_high else GetServiceCoordP1P2()
+@@ -160,23 +208,27 @@
+             else:
+                 stats.t.completion_coord = cs.INFINITY
+ 
++    # Calcolo aree coda a fine simulazione
+     stats.calculate_area_queue()
+ 
++    # Utilizzo per ciascun conteggio server (sull’intera simulazione)
+     per_server_utilization = {}
+     for s in range(1, cs.EDGE_SERVERS_MAX + 1):
+         data = server_util_data[s]
+-        per_server_utilization[s] = data["area_service"] / data["active_time"] if data["active_time"] > 0 else None
++        per_server_utilization[s] = (data["area_service"] / data["active_time"]) if data["active_time"] > 0 else None
+ 
+     return {
+         'seed': seed,
+         'lambda': forced_lambda,
+         'slot': slot_index,
+-        'edge_avg_wait': stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0,
+-        'edge_avg_delay': stats.area_edge.queue / stats.index_edge if stats.index_edge > 0 else 0,
+-        'edge_server_service': stats.area_edge.service / stats.index_edge if stats.index_edge > 0 else 0,
+-        'edge_server_utilization': stats.area_edge.service / stats.t.current if stats.t.current > 0 else 0,
+-        'edge_weight_utilization': stats.area_edge.node / (cs.EDGE_SERVERS * stats.t.current) if stats.t.current > 0 else 0,
+-        'edge_server_number': cs.EDGE_SERVERS,
++        'edge_avg_wait': (stats.area_edge.node / stats.index_edge) if stats.index_edge > 0 else 0.0,
++        'edge_avg_delay': (stats.area_edge.queue / stats.index_edge) if stats.index_edge > 0 else 0.0,
++        'edge_server_service': (stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
++        'edge_server_utilization': (stats.area_edge.service / stats.t.current) if stats.t.current > 0 else 0.0,
++        # Nota: edge_weight_utilization sotto usa il numero di server corrente; se vuoi un peso time-varying
++        # serve un accumulo nel tempo. Questo resta compatibile con la tua API.
++        'edge_weight_utilization': (stats.area_edge.node / (max(1, cs.EDGE_SERVERS) * stats.t.current)) if stats.t.current > 0 else 0.0,
++        'edge_server_number': max(1, cs.EDGE_SERVERS),
+         'server_utilization_by_count': per_server_utilization,
+         'scalability_trace': scalability_trace
+     }, stats
+Index: .idea/misc.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"JavaScriptSettings\">\r\n    <option name=\"languageLevel\" value=\"ES6\" />\r\n  </component>\r\n  <component name=\"ProjectRootManager\" version=\"2\" project-jdk-name=\"Python 3.7 (pmcsn)\" project-jdk-type=\"Python SDK\" />\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/misc.xml b/.idea/misc.xml
+--- a/.idea/misc.xml	(revision 3ea90086ad2ed94b3b09ece069e18a7fbcf2dd39)
++++ b/.idea/misc.xml	(date 1754924174102)
+@@ -1,7 +1,10 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
++  <component name="Black">
++    <option name="sdkName" value="Python 3.12 (pythonProject)" />
++  </component>
+   <component name="JavaScriptSettings">
+     <option name="languageLevel" value="ES6" />
+   </component>
+-  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.7 (pmcsn)" project-jdk-type="Python SDK" />
++  <component name="ProjectRootManager" version="2" project-jdk-name="Python 3.12 (pythonProject)" project-jdk-type="Python SDK" />
+ </project>
+\ No newline at end of file
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"cb0572bf-3a6b-4836-9234-641477405e06\" name=\"Default Changelist\" comment=\"\" />\r\n    <option name=\"EXCLUDED_CONVERTED_TO_IGNORED\" value=\"true\" />\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"FUSProjectUsageTrigger\">\r\n    <session id=\"-121621993\">\r\n      <usages-collector id=\"statistics.lifecycle.project\">\r\n        <counts>\r\n          <entry key=\"project.open.time.11\" value=\"1\" />\r\n          <entry key=\"project.opened\" value=\"1\" />\r\n        </counts>\r\n      </usages-collector>\r\n      <usages-collector id=\"statistics.file.extensions.edit\">\r\n        <counts>\r\n          <entry key=\"txt\" value=\"16\" />\r\n        </counts>\r\n      </usages-collector>\r\n      <usages-collector id=\"statistics.file.types.edit\">\r\n        <counts>\r\n          <entry key=\"PLAIN_TEXT\" value=\"16\" />\r\n        </counts>\r\n      </usages-collector>\r\n    </session>\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"JsBuildToolGruntFileManager\" detection-done=\"true\" sorting=\"DEFINITION_ORDER\" />\r\n  <component name=\"JsBuildToolPackageJson\" detection-done=\"true\" sorting=\"DEFINITION_ORDER\" />\r\n  <component name=\"JsGulpfileManager\">\r\n    <detection-done>true</detection-done>\r\n    <sorting>DEFINITION_ORDER</sorting>\r\n  </component>\r\n  <component name=\"ProjectFrameBounds\">\r\n    <option name=\"x\" value=\"104\" />\r\n    <option name=\"y\" value=\"110\" />\r\n    <option name=\"width\" value=\"1443\" />\r\n    <option name=\"height\" value=\"898\" />\r\n  </component>\r\n  <component name=\"ProjectLevelVcsManager\" settingsEditedManually=\"true\" />\r\n  <component name=\"ProjectView\">\r\n    <navigator proportions=\"\" version=\"1\">\r\n      <foldersAlwaysOnTop value=\"true\" />\r\n    </navigator>\r\n    <panes>\r\n      <pane id=\"Scope\" />\r\n      <pane id=\"ProjectPane\">\r\n        <subPane>\r\n          <expand>\r\n            <path>\r\n              <item name=\"pmcsn\" type=\"b2602c69:ProjectViewProjectNode\" />\r\n              <item name=\"pmcsn\" type=\"462c0819:PsiDirectoryNode\" />\r\n            </path>\r\n          </expand>\r\n          <select />\r\n        </subPane>\r\n      </pane>\r\n    </panes>\r\n  </component>\r\n  <component name=\"PropertiesComponent\">\r\n    <property name=\"WebServerToolWindowFactoryState\" value=\"false\" />\r\n    <property name=\"nodejs_interpreter_path.stuck_in_default_project\" value=\"undefined stuck path\" />\r\n    <property name=\"nodejs_npm_path_reset_for_default_project\" value=\"true\" />\r\n    <property name=\"settings.editor.selected.configurable\" value=\"vcs.Git\" />\r\n  </component>\r\n  <component name=\"RunDashboard\">\r\n    <option name=\"ruleStates\">\r\n      <list>\r\n        <RuleState>\r\n          <option name=\"name\" value=\"ConfigurationTypeDashboardGroupingRule\" />\r\n        </RuleState>\r\n        <RuleState>\r\n          <option name=\"name\" value=\"StatusDashboardGroupingRule\" />\r\n        </RuleState>\r\n      </list>\r\n    </option>\r\n  </component>\r\n  <component name=\"SvnConfiguration\">\r\n    <configuration />\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\r\n      <changelist id=\"cb0572bf-3a6b-4836-9234-641477405e06\" name=\"Default Changelist\" comment=\"\" />\r\n      <created>1754298195273</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1754298195273</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00001\" summary=\"Primo commit\">\r\n      <created>1754298834847</created>\r\n      <option name=\"number\" value=\"00001\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00001\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754298834847</updated>\r\n    </task>\r\n    <option name=\"localTasksCounter\" value=\"2\" />\r\n    <servers />\r\n  </component>\r\n  <component name=\"TodoView\">\r\n    <todo-panel id=\"selected-file\">\r\n      <is-autoscroll-to-source value=\"true\" />\r\n    </todo-panel>\r\n    <todo-panel id=\"all\">\r\n      <are-packages-shown value=\"true\" />\r\n      <is-autoscroll-to-source value=\"true\" />\r\n    </todo-panel>\r\n  </component>\r\n  <component name=\"ToolWindowManager\">\r\n    <frame x=\"104\" y=\"110\" width=\"1443\" height=\"898\" extended-state=\"0\" />\r\n    <layout>\r\n      <window_info id=\"Favorites\" side_tool=\"true\" />\r\n      <window_info content_ui=\"combo\" id=\"Project\" order=\"0\" visible=\"true\" weight=\"0.19985725\" />\r\n      <window_info id=\"Structure\" order=\"1\" side_tool=\"true\" weight=\"0.25\" />\r\n      <window_info anchor=\"bottom\" id=\"Docker\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Database Changes\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Version Control\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Python Console\" />\r\n      <window_info active=\"true\" anchor=\"bottom\" id=\"Terminal\" sideWeight=\"0.49964312\" visible=\"true\" />\r\n      <window_info anchor=\"bottom\" id=\"Event Log\" sideWeight=\"0.5003569\" side_tool=\"true\" />\r\n      <window_info anchor=\"bottom\" id=\"Message\" order=\"0\" />\r\n      <window_info anchor=\"bottom\" id=\"Find\" order=\"1\" />\r\n      <window_info anchor=\"bottom\" id=\"Run\" order=\"2\" />\r\n      <window_info anchor=\"bottom\" id=\"Debug\" order=\"3\" weight=\"0.4\" />\r\n      <window_info anchor=\"bottom\" id=\"Cvs\" order=\"4\" weight=\"0.25\" />\r\n      <window_info anchor=\"bottom\" id=\"Inspection\" order=\"5\" weight=\"0.4\" />\r\n      <window_info anchor=\"bottom\" id=\"TODO\" order=\"6\" />\r\n      <window_info anchor=\"right\" id=\"Database\" />\r\n      <window_info anchor=\"right\" id=\"R Packages\" />\r\n      <window_info anchor=\"right\" id=\"SciView\" />\r\n      <window_info anchor=\"right\" id=\"R Graphics\" />\r\n      <window_info anchor=\"right\" id=\"Commander\" internal_type=\"SLIDING\" order=\"0\" type=\"SLIDING\" weight=\"0.4\" />\r\n      <window_info anchor=\"right\" id=\"Ant Build\" order=\"1\" weight=\"0.25\" />\r\n      <window_info anchor=\"right\" content_ui=\"combo\" id=\"Hierarchy\" order=\"2\" weight=\"0.25\" />\r\n    </layout>\r\n  </component>\r\n  <component name=\"TypeScriptGeneratedFilesManager\">\r\n    <option name=\"version\" value=\"1\" />\r\n  </component>\r\n  <component name=\"VcsContentAnnotationSettings\">\r\n    <option name=\"myLimit\" value=\"2678400000\" />\r\n  </component>\r\n  <component name=\"VcsManagerConfiguration\">\r\n    <MESSAGE value=\"Primo commit\" />\r\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"Primo commit\" />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 3ea90086ad2ed94b3b09ece069e18a7fbcf2dd39)
++++ b/.idea/workspace.xml	(date 1754926038276)
+@@ -1,48 +1,60 @@
+ <?xml version="1.0" encoding="UTF-8"?>
+ <project version="4">
++  <component name="AutoImportSettings">
++    <option name="autoReloadType" value="SELECTIVE" />
++  </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="" />
+-    <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
++    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="implemetnata scalability e raccolti dati su 100 repliche">
++      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/.idea/pmcsn.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/pmcsn.iml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
++      <change beforePath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" afterDir="false" />
++    </list>
++    <list id="ac27c543-9983-46b3-a6ff-446756d52f99" name="Changes by leonardo" comment="" />
+     <option name="SHOW_DIALOG" value="false" />
+     <option name="HIGHLIGHT_CONFLICTS" value="true" />
+     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+     <option name="LAST_RESOLUTION" value="IGNORE" />
+   </component>
+-  <component name="FUSProjectUsageTrigger">
+-    <session id="-121621993">
+-      <usages-collector id="statistics.lifecycle.project">
+-        <counts>
+-          <entry key="project.open.time.11" value="1" />
+-          <entry key="project.opened" value="1" />
+-        </counts>
+-      </usages-collector>
+-      <usages-collector id="statistics.file.extensions.edit">
+-        <counts>
+-          <entry key="txt" value="16" />
+-        </counts>
+-      </usages-collector>
+-      <usages-collector id="statistics.file.types.edit">
+-        <counts>
+-          <entry key="PLAIN_TEXT" value="16" />
+-        </counts>
+-      </usages-collector>
+-    </session>
++  <component name="FileTemplateManagerImpl">
++    <option name="RECENT_TEMPLATES">
++      <list>
++        <option value="Python Script" />
++      </list>
++    </option>
+   </component>
+   <component name="Git.Settings">
+     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+   </component>
++  <component name="GitHubPullRequestSearchHistory">{
++  &quot;lastFilter&quot;: {
++    &quot;state&quot;: &quot;OPEN&quot;,
++    &quot;assignee&quot;: &quot;PierfrancescoLijoi&quot;
++  }
++}</component>
++  <component name="GithubPullRequestsUISettings">{
++  &quot;selectedUrlAndAccountId&quot;: {
++    &quot;url&quot;: &quot;https://github.com/lucacapone/PMCSN-project.git&quot;,
++    &quot;accountId&quot;: &quot;62403c0f-bbd7-4367-9d1f-2adf0fabaef9&quot;
++  }
++}</component>
+   <component name="JsBuildToolGruntFileManager" detection-done="true" sorting="DEFINITION_ORDER" />
+   <component name="JsBuildToolPackageJson" detection-done="true" sorting="DEFINITION_ORDER" />
+   <component name="JsGulpfileManager">
+     <detection-done>true</detection-done>
+     <sorting>DEFINITION_ORDER</sorting>
+   </component>
++  <component name="ProjectColorInfo">{
++  &quot;associatedIndex&quot;: 3
++}</component>
+   <component name="ProjectFrameBounds">
+     <option name="x" value="104" />
+     <option name="y" value="110" />
+     <option name="width" value="1443" />
+     <option name="height" value="898" />
+   </component>
++  <component name="ProjectId" id="30rd7sX9tQ2JzBR5bDtxMkKpwir" />
+   <component name="ProjectLevelVcsManager" settingsEditedManually="true" />
+   <component name="ProjectView">
+     <navigator proportions="" version="1">
+@@ -63,24 +75,76 @@
+       </pane>
+     </panes>
+   </component>
+-  <component name="PropertiesComponent">
+-    <property name="WebServerToolWindowFactoryState" value="false" />
+-    <property name="nodejs_interpreter_path.stuck_in_default_project" value="undefined stuck path" />
+-    <property name="nodejs_npm_path_reset_for_default_project" value="true" />
+-    <property name="settings.editor.selected.configurable" value="vcs.Git" />
++  <component name="ProjectViewState">
++    <option name="hideEmptyMiddlePackages" value="true" />
++    <option name="showLibraryContents" value="true" />
+   </component>
+-  <component name="RunDashboard">
+-    <option name="ruleStates">
+-      <list>
+-        <RuleState>
+-          <option name="name" value="ConfigurationTypeDashboardGroupingRule" />
+-        </RuleState>
+-        <RuleState>
+-          <option name="name" value="StatusDashboardGroupingRule" />
+-        </RuleState>
+-      </list>
+-    </option>
++  <component name="PropertiesComponent">{
++  &quot;keyToString&quot;: {
++    &quot;Python.constants.executor&quot;: &quot;Run&quot;,
++    &quot;Python.main.executor&quot;: &quot;Run&quot;,
++    &quot;Python.sim_utils.executor&quot;: &quot;Run&quot;,
++    &quot;Python.simulation_output.executor&quot;: &quot;Run&quot;,
++    &quot;Python.simulation_stats.executor&quot;: &quot;Run&quot;,
++    &quot;Python.simulator.executor&quot;: &quot;Run&quot;,
++    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
++    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
++    &quot;SONARLINT_PRECOMMIT_ANALYSIS&quot;: &quot;true&quot;,
++    &quot;database.data.extractors.current.export.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,
++    &quot;database.data.extractors.current.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,
++    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
++    &quot;last_opened_file_path&quot;: &quot;C:/Users/pf23l/OneDrive/Desktop/PMCSN-project&quot;,
++    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
++    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
++    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
++    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
++    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
++    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
++  }
++}</component>
++  <component name="RecentsManager">
++    <key name="CopyFile.RECENT_KEYS">
++      <recent name="C:\Users\pf23l\OneDrive\Desktop\PMCSN-project" />
++    </key>
++    <key name="MoveFile.RECENT_KEYS">
++      <recent name="C:\Users\pf23l\OneDrive\Desktop\PMCSN-project\utils" />
++    </key>
++  </component>
++  <component name="RunManager">
++    <configuration default="true" type="PythonConfigurationType" factoryName="Python">
++      <module name="pmcsn" />
++      <option name="ENV_FILES" value="" />
++      <option name="INTERPRETER_OPTIONS" value="" />
++      <option name="PARENT_ENVS" value="true" />
++      <envs>
++        <env name="PYTHONUNBUFFERED" value="1" />
++      </envs>
++      <option name="SDK_HOME" value="" />
++      <option name="SDK_NAME" value="Python 3.12 (pythonProject)" />
++      <option name="WORKING_DIRECTORY" value="" />
++      <option name="IS_MODULE_SDK" value="false" />
++      <option name="ADD_CONTENT_ROOTS" value="true" />
++      <option name="ADD_SOURCE_ROOTS" value="true" />
++      <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
++      <option name="SCRIPT_NAME" value="main" />
++      <option name="PARAMETERS" value="" />
++      <option name="SHOW_COMMAND_LINE" value="false" />
++      <option name="EMULATE_TERMINAL" value="false" />
++      <option name="MODULE_MODE" value="false" />
++      <option name="REDIRECT_INPUT" value="false" />
++      <option name="INPUT_FILE" value="" />
++      <method v="2" />
++    </configuration>
++  </component>
++  <component name="SharedIndexes">
++    <attachedChunks>
++      <set>
++        <option value="bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23339.19" />
++        <option value="bundled-python-sdk-0029f7779945-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23339.19" />
++      </set>
++    </attachedChunks>
+   </component>
++  <component name="SpellCheckerSettings" RuntimeDictionaries="0" Folders="0" CustomDictionaries="0" DefaultDictionary="application-level" UseSingleDictionary="true" transferred="true" />
+   <component name="SvnConfiguration">
+     <configuration />
+   </component>
+@@ -91,6 +155,11 @@
+       <option name="number" value="Default" />
+       <option name="presentableId" value="Default" />
+       <updated>1754298195273</updated>
++      <workItem from="1754389464090" duration="21958000" />
++      <workItem from="1754422266249" duration="4086000" />
++      <workItem from="1754482843073" duration="14430000" />
++      <workItem from="1754555886259" duration="17239000" />
++      <workItem from="1754919330729" duration="4665000" />
+     </task>
+     <task id="LOCAL-00001" summary="Primo commit">
+       <created>1754298834847</created>
+@@ -99,7 +168,79 @@
+       <option name="project" value="LOCAL" />
+       <updated>1754298834847</updated>
+     </task>
+-    <option name="localTasksCounter" value="2" />
++    <task id="LOCAL-00002" summary="Primo commit aggiunti main stampa e cartella per prova">
++      <option name="closed" value="true" />
++      <created>1754389912137</created>
++      <option name="number" value="00002" />
++      <option name="presentableId" value="LOCAL-00002" />
++      <option name="project" value="LOCAL" />
++      <updated>1754389912137</updated>
++    </task>
++    <task id="LOCAL-00003" summary="struttura di partenza, cè qualche bug, commit preventivo prima di modificare significativamente risolverlo">
++      <option name="closed" value="true" />
++      <created>1754399893244</created>
++      <option name="number" value="00003" />
++      <option name="presentableId" value="LOCAL-00003" />
++      <option name="project" value="LOCAL" />
++      <updated>1754399893244</updated>
++    </task>
++    <task id="LOCAL-00004" summary="risolto problema di utilizzazioneC 0.0 , bug ancora su count E anco 0.0">
++      <option name="closed" value="true" />
++      <created>1754403596988</created>
++      <option name="number" value="00004" />
++      <option name="presentableId" value="LOCAL-00004" />
++      <option name="project" value="LOCAL" />
++      <updated>1754403596988</updated>
++    </task>
++    <task id="LOCAL-00005" summary="rilevato bug nella suddivisone nei pacchetti, probabile bug anche nei lambda">
++      <option name="closed" value="true" />
++      <created>1754407764619</created>
++      <option name="number" value="00005" />
++      <option name="presentableId" value="LOCAL-00005" />
++      <option name="project" value="LOCAL" />
++      <updated>1754407764619</updated>
++    </task>
++    <task id="LOCAL-00006" summary="suddivisione dei pacchetti corretto per coordinator edge">
++      <option name="closed" value="true" />
++      <created>1754413580936</created>
++      <option name="number" value="00006" />
++      <option name="presentableId" value="LOCAL-00006" />
++      <option name="project" value="LOCAL" />
++      <updated>1754413580936</updated>
++    </task>
++    <task id="LOCAL-00007" summary="risolto bug sui grafici, ma rilevato altro bug , consideriamo il lambda in base all'orario corrente, in base all'rario il codice preleva il lambda dalla fascia oraria">
++      <option name="closed" value="true" />
++      <created>1754414399952</created>
++      <option name="number" value="00007" />
++      <option name="presentableId" value="LOCAL-00007" />
++      <option name="project" value="LOCAL" />
++      <updated>1754414399952</updated>
++    </task>
++    <task id="LOCAL-00008" summary="risolto bug sui lambda , ora sono considerati correttamente , problema ora su come fargli generare i plot, (come considerare tutti i risultati?)">
++      <option name="closed" value="true" />
++      <created>1754416342821</created>
++      <option name="number" value="00008" />
++      <option name="presentableId" value="LOCAL-00008" />
++      <option name="project" value="LOCAL" />
++      <updated>1754416342821</updated>
++    </task>
++    <task id="LOCAL-00009" summary="sistemati grafici per i lambda per fase transiente,  bug fixed.">
++      <option name="closed" value="true" />
++      <created>1754474269926</created>
++      <option name="number" value="00009" />
++      <option name="presentableId" value="LOCAL-00009" />
++      <option name="project" value="LOCAL" />
++      <updated>1754474269926</updated>
++    </task>
++    <task id="LOCAL-00010" summary="implemetnata scalability e raccolti dati su 100 repliche">
++      <option name="closed" value="true" />
++      <created>1754584353041</created>
++      <option name="number" value="00010" />
++      <option name="presentableId" value="LOCAL-00010" />
++      <option name="project" value="LOCAL" />
++      <updated>1754584353041</updated>
++    </task>
++    <option name="localTasksCounter" value="11" />
+     <servers />
+   </component>
+   <component name="TodoView">
+@@ -140,13 +281,42 @@
+     </layout>
+   </component>
+   <component name="TypeScriptGeneratedFilesManager">
+-    <option name="version" value="1" />
++    <option name="version" value="3" />
++  </component>
++  <component name="Vcs.Log.Tabs.Properties">
++    <option name="TAB_STATES">
++      <map>
++        <entry key="MAIN">
++          <value>
++            <State />
++          </value>
++        </entry>
++      </map>
++    </option>
+   </component>
+   <component name="VcsContentAnnotationSettings">
+     <option name="myLimit" value="2678400000" />
+   </component>
+   <component name="VcsManagerConfiguration">
+     <MESSAGE value="Primo commit" />
+-    <option name="LAST_COMMIT_MESSAGE" value="Primo commit" />
++    <MESSAGE value="Primo commit aggiunti main stampa e cartella per prova" />
++    <MESSAGE value="struttura di partenza, cè qualche bug, commit preventivo prima di modificare significativamente risolverlo" />
++    <MESSAGE value="risolto problema di utilizzazioneC 0.0 , bug ancora su count E anco 0.0" />
++    <MESSAGE value="rilevato bug nella suddivisone nei pacchetti, probabile bug anche nei lambda" />
++    <MESSAGE value="suddivisione dei pacchetti corretto per coordinator edge" />
++    <MESSAGE value="risolto bug sui grafici, ma rilevato altro bug , consideriamo il lambda in base all'orario corrente, in base all'rario il codice preleva il lambda dalla fascia oraria" />
++    <MESSAGE value="risolto bug sui lambda , ora sono considerati correttamente , problema ora su come fargli generare i plot, (come considerare tutti i risultati?)" />
++    <MESSAGE value="sistemati grafici per i lambda per fase transiente, fixed bug." />
++    <MESSAGE value="sistemati grafici per i lambda per fase transiente,  bug fixed." />
++    <MESSAGE value="implemetnata scalability e raccolti dati su 100 repliche" />
++    <option name="LAST_COMMIT_MESSAGE" value="implemetnata scalability e raccolti dati su 100 repliche" />
++  </component>
++  <component name="com.intellij.coverage.CoverageDataManagerImpl">
++    <SUITE FILE_PATH="coverage/PMCSN_project$sim_utils.coverage" NAME="sim_utils Coverage Results" MODIFIED="1754401305858" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
++    <SUITE FILE_PATH="coverage/PMCSN_project$constants.coverage" NAME="constants Coverage Results" MODIFIED="1754399506220" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
++    <SUITE FILE_PATH="coverage/PMCSN_project$simulation_stats.coverage" NAME="simulation_stats Coverage Results" MODIFIED="1754400174506" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
++    <SUITE FILE_PATH="coverage/PMCSN_project$simulation_output.coverage" NAME="simulation_output Coverage Results" MODIFIED="1754396884155" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />
++    <SUITE FILE_PATH="coverage/PMCSN_project$simulator.coverage" NAME="simulator Coverage Results" MODIFIED="1754401115058" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/simulation" />
++    <SUITE FILE_PATH="coverage/PMCSN_project$main.coverage" NAME="main Coverage Results" MODIFIED="1754397674912" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$" />
+   </component>
+ </project>
+\ No newline at end of file
+Index: .idea/inspectionProfiles/Project_Default.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/inspectionProfiles/Project_Default.xml b/.idea/inspectionProfiles/Project_Default.xml
+new file mode 100644
+--- /dev/null	(date 1754924174079)
++++ b/.idea/inspectionProfiles/Project_Default.xml	(date 1754924174079)
+@@ -0,0 +1,13 @@
++<component name="InspectionProjectProfileManager">
++  <profile version="1.0">
++    <option name="myName" value="Project Default" />
++    <inspection_tool class="Eslint" enabled="true" level="WARNING" enabled_by_default="true" />
++    <inspection_tool class="PyPep8NamingInspection" enabled="true" level="WEAK WARNING" enabled_by_default="true">
++      <option name="ignoredErrors">
++        <list>
++          <option value="N806" />
++        </list>
++      </option>
++    </inspection_tool>
++  </profile>
++</component>
+\ No newline at end of file
+Index: .idea/pmcsn.iml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<module type=\"PYTHON_MODULE\" version=\"4\">\r\n  <component name=\"NewModuleRootManager\">\r\n    <content url=\"file://$MODULE_DIR$\">\r\n      <excludeFolder url=\"file://$MODULE_DIR$/venv\" />\r\n    </content>\r\n    <orderEntry type=\"inheritedJdk\" />\r\n    <orderEntry type=\"sourceFolder\" forTests=\"false\" />\r\n    <orderEntry type=\"library\" name=\"R User Library\" level=\"project\" />\r\n    <orderEntry type=\"library\" name=\"R Skeletons\" level=\"application\" />\r\n  </component>\r\n  <component name=\"TestRunnerService\">\r\n    <option name=\"PROJECT_TEST_RUNNER\" value=\"Unittests\" />\r\n  </component>\r\n</module>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/pmcsn.iml b/.idea/pmcsn.iml
+--- a/.idea/pmcsn.iml	(revision 3ea90086ad2ed94b3b09ece069e18a7fbcf2dd39)
++++ b/.idea/pmcsn.iml	(date 1754924174133)
+@@ -4,7 +4,7 @@
+     <content url="file://$MODULE_DIR$">
+       <excludeFolder url="file://$MODULE_DIR$/venv" />
+     </content>
+-    <orderEntry type="inheritedJdk" />
++    <orderEntry type="jdk" jdkName="Python 3.12 (pythonProject)" jdkType="Python SDK" />
+     <orderEntry type="sourceFolder" forTests="false" />
+     <orderEntry type="library" name="R User Library" level="project" />
+     <orderEntry type="library" name="R Skeletons" level="application" />
