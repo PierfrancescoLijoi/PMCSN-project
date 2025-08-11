@@ -201,16 +201,42 @@ def calculate_confidence_interval(data, confidence=0.95):
 # -------------------------------
 def append_stats(replicationStats, results, stats):
     replicationStats.seeds.append(results['seed'])
-    replicationStats.lambdas.append(results.get('lambda'))  # nuovo
-    replicationStats.slots.append(results.get('slot'))      # nuovo
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
 
+    # tempi di risposta (già presenti)
     replicationStats.edge_wait_times.append(results['edge_avg_wait'])
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
 
+    # nuovi: code
+    replicationStats.edge_delay_times.append(results['edge_avg_delay'])
+    replicationStats.cloud_delay_times.append(results['cloud_avg_delay'])
+    replicationStats.coord_delay_times.append(results['coord_avg_delay'])
+
+    # L e Lq
+    replicationStats.edge_L.append(results['edge_L'])
+    replicationStats.edge_Lq.append(results['edge_Lq'])
+    replicationStats.cloud_L.append(results['cloud_L'])
+    replicationStats.cloud_Lq.append(results['cloud_Lq'])
+    replicationStats.coord_L.append(results['coord_L'])
+    replicationStats.coord_Lq.append(results['coord_Lq'])
+
+    # utilizzazioni
+    replicationStats.edge_utilization.append(results['edge_utilization'])
+    replicationStats.coord_utilization.append(results['coord_utilization'])
+    replicationStats.cloud_busy.append(results['cloud_avg_busy_servers'])
+
+    # throughput
+    replicationStats.edge_X.append(results['edge_throughput'])
+    replicationStats.cloud_X.append(results['cloud_throughput'])
+    replicationStats.coord_X.append(results['coord_throughput'])
+
+    # transiente (resta uguale)
     replicationStats.edge_wait_interval.append(stats.edge_wait_times)
     replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
     replicationStats.coord_wait_interval.append(stats.coord_wait_times)
+
 
 def append_edge_scalability_stats(replicationStats, results, stats):
     replicationStats.seeds.append(results['seed'])

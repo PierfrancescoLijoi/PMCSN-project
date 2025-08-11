@@ -4,11 +4,9 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="statistics updated">
-      <change afterPath="$PROJECT_DIR$/.idea/inspectionProfiles/Project_Default.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/pmcsn.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/pmcsn.iml" afterDir="false" />
+    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="fix plots">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/edge_scalability_statistics.csv" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/infinite_statistics.csv" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/lambda_scan_statistics.csv" beforeDir="false" />
@@ -225,7 +223,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123233804.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123456789.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1254814226.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1261112113-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1261112113.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1291273996.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed129531691.png" beforeDir="false" />
@@ -248,7 +245,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1632007700.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed165991461.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1668467470.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1674765357-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1674765357.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1704927240.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1711225127.png" beforeDir="false" />
@@ -258,7 +254,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1784144667.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1820604437.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1857064207.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1863362094-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1863362094.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1893523977.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1899821864.png" beforeDir="false" />
@@ -270,7 +265,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2009201174.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed202451231.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2045660944.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2051958831-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2051958831.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2082120714.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2088418601.png" beforeDir="false" />
@@ -288,7 +282,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed463967508.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed500427278.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed50314264.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed506725165-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed506725165.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed536887048.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed543184935.png" beforeDir="false" />
@@ -298,7 +291,6 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed616104475.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed652564245.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed689024015.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed695321902-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed695321902.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed725483785.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed731781672.png" beforeDir="false" />
@@ -310,11 +302,9 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed841160982.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed86774034.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed877620752.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed883918639-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed883918639.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed914080522.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed920378409.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed93071921-Pierfrancesco.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed93071921.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed950540292.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed956838179.png" beforeDir="false" />
@@ -338,7 +328,11 @@
       <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/cloud_server.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/coord_server.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/edge_node.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/sim_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/sim_utils.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/simulation_output.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/simulation_output.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/simulation_stats.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/simulation_stats.py" afterDir="false" />
     </list>
     <list id="ac27c543-9983-46b3-a6ff-446756d52f99" name="Changes by leonardo" comment="" />
     <option name="SHOW_DIALOG" value="false" />
@@ -488,7 +482,7 @@
       <workItem from="1754422266249" duration="4086000" />
       <workItem from="1754482843073" duration="14430000" />
       <workItem from="1754555886259" duration="17239000" />
-      <workItem from="1754919330729" duration="7435000" />
+      <workItem from="1754919330729" duration="12843000" />
     </task>
     <task id="LOCAL-00001" summary="Primo commit">
       <created>1754298834847</created>
@@ -577,7 +571,15 @@
       <option name="project" value="LOCAL" />
       <updated>1754927185002</updated>
     </task>
-    <option name="localTasksCounter" value="12" />
+    <task id="LOCAL-00012" summary="fix plots">
+      <option name="closed" value="true" />
+      <created>1754929015147</created>
+      <option name="number" value="00012" />
+      <option name="presentableId" value="LOCAL-00012" />
+      <option name="project" value="LOCAL" />
+      <updated>1754929015147</updated>
+    </task>
+    <option name="localTasksCounter" value="13" />
     <servers />
   </component>
   <component name="TodoView">
@@ -647,7 +649,8 @@
     <MESSAGE value="sistemati grafici per i lambda per fase transiente,  bug fixed." />
     <MESSAGE value="implemetnata scalability e raccolti dati su 100 repliche" />
     <MESSAGE value="statistics updated" />
-    <option name="LAST_COMMIT_MESSAGE" value="statistics updated" />
+    <MESSAGE value="fix plots" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix plots" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/PMCSN_project$sim_utils.coverage" NAME="sim_utils Coverage Results" MODIFIED="1754401305858" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />

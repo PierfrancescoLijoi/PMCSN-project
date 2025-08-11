@@ -122,11 +122,33 @@ class SimulationStats:
 class ReplicationStats:
     def __init__(self):
         self.seeds = []
+        self.lambdas = []
+        self.slots = []
+
+        # tempi di risposta (già esistenti)
         self.edge_wait_times = []
         self.cloud_wait_times = []
         self.coord_wait_times = []
-        self.lambdas = []  # nuovo campo
-        self.slots = []  # nuovo campo
+
+        # nuovi: tempi di attesa in coda
+        self.edge_delay_times = []
+        self.cloud_delay_times = []
+        self.coord_delay_times = []
+
+        # L e Lq
+        self.edge_L = []; self.edge_Lq = []
+        self.cloud_L = []; self.cloud_Lq = []
+        self.coord_L = []; self.coord_Lq = []
+
+        # utilizzazioni
+        self.edge_utilization = []
+        self.coord_utilization = []
+        self.cloud_busy = []  # n° medio server occupati
+
+        # throughput
+        self.edge_X = []; self.cloud_X = []; self.coord_X = []
+
+        # per grafici transiente (già esistenti)
         self.edge_wait_interval = []
         self.cloud_wait_interval = []
         self.coord_wait_interval = []

@@ -250,22 +250,79 @@ def execute(stats, stop, forced_lambda=None):
         else:
             stats.t.completion_coord = cs.INFINITY
 
-
 def return_stats(stats, t, seed):
-    """
-    Restituisce i risultati finali della simulazione in formato dizionario.
-    """
+    # Assicurati che calculate_area_queue() sia stato chiamato prima
+    edge_W  = stats.area_edge.node  / stats.index_edge if stats.index_edge  > 0 else 0.0
+    cloud_W = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    coord_W = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0.0
+
+    edge_Wq  = stats.area_edge.queue  / stats.index_edge if stats.index_edge  > 0 else 0.0
+    cloud_Wq = stats.area_cloud.queue / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    coord_Wq = stats.area_coord.queue / stats.index_coord if stats.index_coord > 0 else 0.0
+
+    edge_L  = stats.area_edge.node  / t if t > 0 else 0.0
+    cloud_L = stats.area_cloud.node / t if t > 0 else 0.0
+    coord_L = stats.area_coord.node / t if t > 0 else 0.0
+
+    edge_Lq  = stats.area_edge.queue  / t if t > 0 else 0.0
+    cloud_Lq = stats.area_cloud.queue / t if t > 0 else 0.0
+    coord_Lq = stats.area_coord.queue / t if t > 0 else 0.0
+
+    edge_util  = stats.area_edge.service  / t if t > 0 else 0.0       # mono-server: frazione ∈ [0,1]
+    coord_util = stats.area_coord.service / t if t > 0 else 0.0       # mono-server: frazione ∈ [0,1]
+    cloud_busy = stats.area_cloud.service / t if t > 0 else 0.0       # ∞-server: n° medio server occupati
+
+    X_edge  = stats.index_edge  / t if t > 0 else 0.0
+    X_cloud = stats.index_cloud / t if t > 0 else 0.0
+    X_coord = stats.index_coord / t if t > 0 else 0.0
+
+    s_edge  = stats.area_edge.service  / stats.index_edge  if stats.index_edge  > 0 else 0.0
+    s_cloud = stats.area_cloud.service / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    s_coord = stats.area_coord.service / stats.index_coord if stats.index_coord > 0 else 0.0
+
     return {
         'seed': seed,
-        'edge_avg_wait': stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0,
-        'cloud_avg_wait': stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0,
-        'coord_avg_wait': stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0,
+
+        # tempi di risposta (già presenti ma manteniamo i nomi)
+        'edge_avg_wait': edge_W,
+        'cloud_avg_wait': cloud_W,
+        'coord_avg_wait': coord_W,
+
+        # nuove: tempi di attesa in coda
+        'edge_avg_delay': edge_Wq,
+        'cloud_avg_delay': cloud_Wq,
+        'coord_avg_delay': coord_Wq,
+
+        # L e Lq
+        'edge_L': edge_L, 'edge_Lq': edge_Lq,
+        'cloud_L': cloud_L, 'cloud_Lq': cloud_Lq,
+        'coord_L': coord_L, 'coord_Lq': coord_Lq,
+
+        # utilizzazioni
+        'edge_utilization': edge_util,
+        'coord_utilization': coord_util,
+        'cloud_avg_busy_servers': cloud_busy,
+
+        # throughput
+        'edge_throughput': X_edge,
+        'cloud_throughput': X_cloud,
+        'coord_throughput': X_coord,
+
+        # tempi di servizio realizzati
+        'edge_service_time_mean': s_edge,
+        'cloud_service_time_mean': s_cloud,
+        'coord_service_time_mean': s_coord,
+
+        # contatori già esistenti
         'count_E': stats.count_E,
         'count_E_P1': stats.count_E_P1,
         'count_E_P2': stats.count_E_P2,
         'count_E_P3': stats.count_E_P3,
         'count_E_P4': stats.count_E_P4,
         'count_C': stats.count_C,
-        'E_utilization': stats.area_E.service / t if t > 0 else 0,
-        'C_utilization': stats.area_C.service / t if t > 0 else 0,
+
+        # NB: queste due nel codice attuale sono “per classe”, non per centro.
+        # Le lasciamo per compatibilità, ma ora hai anche quelle per centro.
+        'E_utilization': stats.area_E.service / t if t > 0 else 0.0,
+        'C_utilization': stats.area_C.service / t if t > 0 else 0.0,
     }

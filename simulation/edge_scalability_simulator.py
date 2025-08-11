@@ -217,18 +217,50 @@ def edge_scalability_simulation(stop, forced_lambda=None, slot_index=None):
         data = server_util_data[s]
         per_server_utilization[s] = (data["area_service"] / data["active_time"]) if data["active_time"] > 0 else None
 
-    return {
+    T = stats.t.current if stats.t.current > 0 else 1.0
+
+    edge_W = stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0.0
+    edge_Wq = stats.area_edge.queue / stats.index_edge if stats.index_edge > 0 else 0.0
+    cloud_W = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    cloud_Wq = stats.area_cloud.queue / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    coord_W = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0.0
+    coord_Wq = stats.area_coord.queue / stats.index_coord if stats.index_coord > 0 else 0.0
+
+    results = {
         'seed': seed,
         'lambda': forced_lambda,
         'slot': slot_index,
-        'edge_avg_wait': (stats.area_edge.node / stats.index_edge) if stats.index_edge > 0 else 0.0,
-        'edge_avg_delay': (stats.area_edge.queue / stats.index_edge) if stats.index_edge > 0 else 0.0,
+
+        # Edge (già presenti + aggiunte)
+        'edge_avg_wait': edge_W,
+        'edge_avg_delay': edge_Wq,
+        'edge_L': stats.area_edge.node / T,
+        'edge_Lq': stats.area_edge.queue / T,
         'edge_server_service': (stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
-        'edge_server_utilization': (stats.area_edge.service / stats.t.current) if stats.t.current > 0 else 0.0,
-        # Nota: edge_weight_utilization sotto usa il numero di server corrente; se vuoi un peso time-varying
-        # serve un accumulo nel tempo. Questo resta compatibile con la tua API.
-        'edge_weight_utilization': (stats.area_edge.node / (max(1, cs.EDGE_SERVERS) * stats.t.current)) if stats.t.current > 0 else 0.0,
+        'edge_server_utilization': stats.area_edge.service / T,
+        'edge_weight_utilization': (stats.area_edge.node / (max(1, cs.EDGE_SERVERS) * T)),
         'edge_server_number': max(1, cs.EDGE_SERVERS),
+
+        # Cloud
+        'cloud_avg_wait': cloud_W,
+        'cloud_avg_delay': cloud_Wq,
+        'cloud_L': stats.area_cloud.node / T,
+        'cloud_Lq': stats.area_cloud.queue / T,
+        'cloud_service_time_mean': (stats.area_cloud.service / stats.index_cloud) if stats.index_cloud > 0 else 0.0,
+        'cloud_avg_busy_servers': stats.area_cloud.service / T,
+        'cloud_throughput': (stats.index_cloud / T),
+
+        # Coordinator
+        'coord_avg_wait': coord_W,
+        'coord_avg_delay': coord_Wq,
+        'coord_L': stats.area_coord.node / T,
+        'coord_Lq': stats.area_coord.queue / T,
+        'coord_service_time_mean': (stats.area_coord.service / stats.index_coord) if stats.index_coord > 0 else 0.0,
+        'coord_utilization': stats.area_coord.service / T,
+        'coord_throughput': (stats.index_coord / T),
+
+        # extra
         'server_utilization_by_count': per_server_utilization,
         'scalability_trace': scalability_trace
-    }, stats
+    }
+    return results, stats

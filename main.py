@@ -26,7 +26,7 @@ def start_lambda_scan_simulation():
     replicationStats = ReplicationStats()
     print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
 
-    file_name = "lambda_scan_statistics.csv"
+    file_name = "finite_statistics.csv"
     clear_file(file_name)
 
     # Ciclo sulle repliche
@@ -161,11 +161,83 @@ def start_edge_scalability_simulation():
     print_simulation_stats(replicationStats, "edge_scalability")
 
     return replicationStats
+def print_csv_legend():
+    print("\n=== CSV Columns Legend ===\n")
+
+    legend = {
+        # Identificativi simulazione
+        "seed": "Identificativo del seme RNG usato per la replica (per riproducibilità).",
+        "slot": "Indice della fascia oraria (utile per scenari con λ variabile per slot).",
+        "lambda": "Tasso medio di arrivi impostato in quella replica (job/unità tempo).",
+
+        # Tempi
+        "edge_avg_wait": "Tempo medio di risposta W del nodo Edge (attesa + servizio).",
+        "cloud_avg_wait": "Tempo medio di risposta W del nodo Cloud.",
+        "coord_avg_wait": "Tempo medio di risposta W del nodo Coordinator.",
+        "edge_avg_delay": "Tempo medio di attesa in coda Wq del nodo Edge (senza servizio).",
+        "cloud_avg_delay": "Tempo medio di attesa in coda Wq del nodo Cloud.",
+        "coord_avg_delay": "Tempo medio di attesa in coda Wq del nodo Coordinator.",
+
+        # Numero medio di job
+        "edge_L": "Numero medio di job presenti nel nodo Edge (in coda + in servizio).",
+        "edge_Lq": "Numero medio di job in coda nel nodo Edge.",
+        "cloud_L": "Numero medio di job presenti nel nodo Cloud.",
+        "cloud_Lq": "Numero medio di job in coda nel nodo Cloud.",
+        "coord_L": "Numero medio di job presenti nel nodo Coordinator.",
+        "coord_Lq": "Numero medio di job in coda nel nodo Coordinator.",
+
+        # Utilizzazione
+        "edge_utilization": "Utilizzazione media aggregata del nodo Edge (area.service/T).",
+        "coord_utilization": "Utilizzazione media aggregata del nodo Coordinator.",
+        "cloud_avg_busy_servers": "Numero medio di server occupati nel Cloud (ρ in multi-server).",
+
+        # Throughput
+        "edge_throughput": "Tasso medio di completamenti X nel nodo Edge (job/unità tempo).",
+        "cloud_throughput": "Tasso medio di completamenti X nel nodo Cloud.",
+        "coord_throughput": "Tasso medio di completamenti X nel nodo Coordinator.",
+
+        # Tempi di servizio medi osservati
+        "edge_service_time_mean": "Tempo medio di servizio realizzato nel nodo Edge (1/μ osservato).",
+        "cloud_service_time_mean": "Tempo medio di servizio realizzato nel nodo Cloud.",
+        "coord_service_time_mean": "Tempo medio di servizio realizzato nel nodo Coordinator.",
+
+        # Contatori job completati
+        "count_E": "Numero di job di classe E completati.",
+        "count_E_P1": "Numero di job di classe E_P1 completati.",
+        "count_E_P2": "Numero di job di classe E_P2 completati.",
+        "count_E_P3": "Numero di job di classe E_P3 completati.",
+        "count_E_P4": "Numero di job di classe E_P4 completati.",
+        "count_C": "Numero di job di classe C completati.",
+
+        # Legacy (vecchie metriche)
+        "E_utilization": (
+            "Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE E "
+            "(cioè la singola coda/server che gestisce i job di tipo E nel modello). "
+            "Non include eventuali altri centri/server presenti nello stesso nodo Edge "
+            "che servono job di altre classi (es. P1, P2...). "
+            "Per questo motivo, se il nodo Edge ospita più code/server per classi diverse, "
+            "questo valore può essere significativamente più basso rispetto a 'edge_utilization', "
+            "che invece considera l'uso complessivo di tutti i server del nodo Edge."
+        ),
+        "C_utilization": (
+            "Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE C "
+            "(cioè la singola coda/server che gestisce i job di tipo C nel modello). "
+            "Non include eventuali altri centri/server presenti nello stesso nodo Coordinator "
+            "che servono job di altre classi o funzioni. "
+            "Se il Coordinator ospita più code o server per tipi di job diversi, "
+            "questo valore può essere più basso rispetto a 'coord_utilization', "
+            "che tiene conto di tutti i server presenti nel nodo Coordinator."
+        )
+
+    }
+    for name, desc in legend.items():
+        print(f"{name:30} -> {desc}")
 
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
+    print_csv_legend()
     stats_finite = start_lambda_scan_simulation()
     stats_infinite = start_infinite_lambda_scan_simulation()
     start_edge_scalability_simulation()
