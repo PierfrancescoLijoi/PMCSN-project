@@ -246,7 +246,7 @@ def plot_multi_lambda_per_seed(wait_times, seeds, name, sim_type, lambdas, slots
         plt.xlabel("Time (s)")
         plt.ylabel("Average wait time (s)")
         plt.title(f"Multi-λ Analysis - {name} | Seed {seed}")
-        plt.legend()
+        #plt.legend()
         plt.grid(True)
 
         output_path = os.path.join(output_dir, f"{name}_seed{seed}.png")
@@ -288,7 +288,7 @@ def plot_multi_seed_per_lambda(wait_times, seeds, name, sim_type, lambdas, slots
         plt.xlabel("Time (s)")
         plt.ylabel("Average wait time (s)")
         plt.title(f"Multi-seed Analysis - {name} | λ={lam:.4f}")
-        plt.legend()
+        #plt.legend()
         plt.grid(True)
 
         output_path = os.path.join(output_dir, f"{name}_lambda{lam:.4f}.png")
