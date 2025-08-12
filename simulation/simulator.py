@@ -83,11 +83,6 @@ def infinite_simulation(forced_lambda=None):
     # scarta batch iniziali per rimuovere il transitorio
     remove_batch(batch_stats, 25)
 
-    # plot analisi transiente
-    plot_analysis(wait_times_edge, seeds, "edge_node", "standard")
-    plot_analysis(wait_times_cloud, seeds, "cloud_server", "standard")
-    plot_analysis(wait_times_coord, seeds, "coord_server", "standard")
-
     # attacco lista di risultati all'oggetto batch_stats
     batch_stats.results = results_list
     return batch_stats

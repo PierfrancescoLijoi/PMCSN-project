@@ -48,6 +48,31 @@ header = [
     "E_utilization","C_utilization"
 ]
 
+header_infinite =[
+    "seed", "slot", "lambda", "batch"
+
+    # tempi
+    "edge_avg_wait", "cloud_avg_wait", "coord_avg_wait",
+    "edge_avg_delay", "cloud_avg_delay", "coord_avg_delay",
+
+    # L, Lq
+    "edge_L", "edge_Lq", "cloud_L", "cloud_Lq", "coord_L", "coord_Lq",
+
+    # utilizzazioni per centro
+    "edge_utilization", "coord_utilization", "cloud_avg_busy_servers",
+
+    # throughput
+    "edge_throughput", "cloud_throughput", "coord_throughput",
+
+    # tempi di servizio realizzati
+    "edge_service_time_mean", "cloud_service_time_mean", "coord_service_time_mean",
+
+    # contatori esistenti
+    "count_E", "count_E_P1", "count_E_P2", "count_E_P3", "count_E_P4", "count_C",
+
+    # legacy per compatibilità
+    "E_utilization", "C_utilization"
+]
 
 header_edge_scalability = [
     "seed","lambda","slot",
@@ -107,6 +132,44 @@ header_coord_scalability = [
     # dettagli scalabilità
     "server_utilization_by_count"
 ]
+
+# === Header dedicato per la simulazione ad orizzonte infinito ===
+infinite_header = [
+    "seed", "slot", "lambda", "batch",
+    # tempi medi per nodo
+    "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
+    "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
+    # L, Lq
+    "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
+    # utilizzazioni / busy servers
+    "edge_utilization","E_utilization","C_utilization","cloud_avg_busy_servers",
+    # throughput
+    "edge_throughput","cloud_throughput","coord_throughput",
+    # tempi di servizio
+    "edge_service_time_mean","cloud_service_time_mean","coord_service_time_mean",
+    # conteggi per classi
+    "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C"
+]
+
+def clear_infinite_file(file_name):
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=infinite_header)
+        writer.writeheader()
+
+def write_infinite_row(results, file_name):
+    """Scrive una riga per la simulazione ad orizzonte infinito usando 'infinite_header'."""
+    path = os.path.join(file_path, file_name)
+    os.makedirs(file_path, exist_ok=True)
+    # Serializza solo le chiavi presenti nell'header infinito
+    results_serialized = {k: results.get(k, "") for k in infinite_header}
+    file_exists = os.path.exists(path) and os.path.getsize(path) > 0
+    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
+        writer = csv.DictWriter(csvfile, fieldnames=infinite_header)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow(results_serialized)
 
 def _label_for_sim(sim_type: str) -> str:
     """
@@ -485,3 +548,108 @@ def clear_coord_scalability_file(file_name):
     with open(path, 'w', newline='', encoding='utf-8') as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=header_coord_scalability)
         writer.writeheader()
+
+
+# ---------------------------- PLOT FOR INFINITE SIMULATIONS -------------------------------
+def plot_infinite_analysis():
+    """
+    Grafici per l'analisi a orizzonte infinito:
+    - Nodi (Edge/Cloud/Coordinator): x = batch, linee per ciascun λ reale
+    - Curva Edge response time vs λ con punti per slot e linea QoS = 3s
+    Salva tutto in output/plot/orizzonte infinito
+    """
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    from pathlib import Path
+
+    out_dir = Path(file_path)
+    csv_path = out_dir / "infinite_statistics.csv"
+    if not csv_path.exists():
+        print(f"[plot_infinite_analysis] File non trovato: {csv_path}")
+        return
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        print("[plot_infinite_analysis] Nessun dato in infinite_statistics.csv")
+        return
+
+    # Assicura la colonna 'batch'
+    if 'batch' not in df.columns:
+        df = df.sort_values(["slot", "lambda"]).copy()
+        df['batch'] = df.groupby(["slot", "lambda"]).cumcount()
+    else:
+        df = df.sort_values(["lambda", "batch"]).copy()
+
+    plot_dir = out_dir / "plot" / "orizzonte infinito"
+    plot_dir.mkdir(parents=True, exist_ok=True)
+
+    # ---------- 1) Nodi: x = batch, linee per ciascun λ reale ----------
+    agg_lam_batch = df.groupby(["lambda", "batch"], as_index=False).agg({
+        "edge_avg_wait": "mean",
+        "cloud_avg_wait": "mean",
+        "coord_avg_wait": "mean",
+    })
+
+    def plot_node_by_lambda(ycol, title, fname):
+        plt.figure()
+        any_line = False
+        for lam_val, g in agg_lam_batch.groupby("lambda"):
+            g = g.sort_values("batch")
+            if not g.empty:
+                plt.plot(g["batch"], g[ycol], marker="", label=f"λ={lam_val:.5f}")
+                any_line = True
+        plt.xlabel("Batch")
+        plt.ylabel("Tempo medio di risposta (s)")
+        plt.title(title)
+        if any_line:
+            plt.legend()
+        plt.grid(True)
+        plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
+        plt.close()
+
+    plot_node_by_lambda("edge_avg_wait",
+                        "Nodo Edge: tempo di risposta per batch (linee per λ)",
+                        "infinite_edge_response_vs_batch_per_lambda.png")
+    plot_node_by_lambda("cloud_avg_wait",
+                        "Nodo Cloud: tempo di risposta per batch (linee per λ)",
+                        "infinite_cloud_response_vs_batch_per_lambda.png")
+    plot_node_by_lambda("coord_avg_wait",
+                        "Nodo Coordinator: tempo di risposta per batch (linee per λ)",
+                        "infinite_coord_response_vs_batch_per_lambda.png")
+
+    # ---------- 2) Curva Edge response time vs λ con punti per slot + QoS ----------
+    agg_lambda_global = df.groupby("lambda", as_index=False).agg({
+        "edge_avg_wait": "mean"
+    }).sort_values("lambda")
+
+    agg_lambda_slot = df.groupby(["slot", "lambda"], as_index=False).agg({
+        "edge_avg_wait": "mean"
+    }).sort_values(["lambda", "slot"])
+
+    qos_seconds = 3.0  # QoS richiesto = 3s
+
+    plt.figure()
+    # Curva media globale (λ -> W_edge)
+    if not agg_lambda_global.empty:
+        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_avg_wait"],
+                 marker="o", color="blue")
+    # Punti per slot
+    for slot, g in agg_lambda_slot.groupby("slot"):
+        if not g.empty:
+            plt.scatter(g["lambda"], g["edge_avg_wait"], label=f"Slot {slot}")
+            for _, r in g.iterrows():
+                plt.annotate(f"{r['lambda']:.5f}",
+                             (r["lambda"], r["edge_avg_wait"]),
+                             textcoords="offset points", xytext=(0, 6),
+                             ha="center", fontsize=8)
+    # Linea QoS
+    plt.axhline(y=qos_seconds, linestyle="--", color="r", linewidth=1.2,
+                label=f"QoS = {qos_seconds:.0f}s")
+    plt.xlabel("λ (arrivi/secondo)")
+    plt.ylabel("Tempo medio di risposta Edge (s)")
+    plt.title("Tempo di risposta Edge rispetto a λ (con QoS = 3s)")
+    plt.legend()
+    plt.grid(True)
+    plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
+                dpi=150, bbox_inches="tight")
+    plt.close()
