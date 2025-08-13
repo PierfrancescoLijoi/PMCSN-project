@@ -16,6 +16,25 @@ from statistics import StatisticsError
 from decimal import Decimal
 from fractions import Fraction
 
+# -------------------------------------------------------------------------------
+# helper function per ricalcolare le probabilità dei pacchetti a partire da p_c
+# -------------------------------------------------------------------------------
+
+BASE_P = getattr(cs, "P_BASES", (0.20, 0.25, 0.10, 0.05))  # opzionale: puoi definire P_BASES in constants.py
+
+def set_pc_and_update_probs(pc: float):
+    pc = max(0.0, min(1.0, float(pc)))
+    cs.P_C = pc
+    cs.P_COORD = 1.0 - cs.P_C
+
+    denom = cs.P_COORD if cs.P_COORD > 0 else 1.0
+    b1, b2, b3, b4 = BASE_P
+
+    cs.P1_PROB = b1 / denom
+    cs.P2_PROB = b2 / denom
+    cs.P3_PROB = b3 / denom
+    cs.P4_PROB = b4 / denom
+#---------------------------------------------------------------------------------
 
 def safe_stdev(data, xbar=None):
     """Calcolo della deviazione standard campionaria senza usare statistics.stdev"""

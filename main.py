@@ -8,14 +8,18 @@ Riferimento: Sezione "Modello computazionale" del documento.
 La simulazione segue un approccio next-event-driven con orizzonte finito
 (transiente), come definito a pagina 8–10 del testo allegato.
 """
+import os
+
+from matplotlib import pyplot as plt
 
 import utils.constants as cs
+from simulation.edge_ccord_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
     plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, write_scalability_trace, clear_infinite_file, \
-    write_infinite_row, plot_infinite_analysis
+    write_infinite_row, plot_infinite_analysis, write_file_merged_scalability, clear_merged_scalability_file
 from utils.simulation_stats import ReplicationStats
-from utils.sim_utils import append_stats
+from utils.sim_utils import append_stats, set_pc_and_update_probs, calculate_confidence_interval
 from simulation.edge_scalability_simulator import edge_scalability_simulation
 from utils.simulation_output import write_file_edge_scalability, clear_edge_scalability_file
 from utils.sim_utils import append_edge_scalability_stats
@@ -298,13 +302,177 @@ def print_csv_legend():
     for name, desc in legend.items():
         print(f"{name:30} -> {desc}")
 
+
+def start_scalability_simulation():
+    """
+    Scalabilità UNIFICATA (Edge + Coordinator) con metodo a repliche:
+    - Esegue tutte le repliche per ciascun p_c (in cs.PC_VALUES), poi passa al successivo.
+    - Scrive CSV (una riga per replica×slot).
+    - Grafico: 1 per p_c (media a gradini del numero di server sulle repliche).
+    - Report cumulativo per p_c: min/max/media server, log UP/DOWN con tempo e slot, W ± CI(95%) per Edge/Cloud/Coord.
+    """
+    file_name = "merged_scalability_statistics.csv"
+    clear_merged_scalability_file(file_name)
+
+    output_dir = os.path.join("output", "merged_scalability")
+    os.makedirs(output_dir, exist_ok=True)
+
+    slot_duration = getattr(cs, "SLOT_DURATION", 3600.0)
+    num_slots = len(cs.LAMBDA_SLOTS) if hasattr(cs, "LAMBDA_SLOTS") else 1
+    horizon = slot_duration * num_slots
+    decision_interval = float(getattr(cs, "SCALING_WINDOW", 1000.0))
+    if decision_interval <= 0:
+        decision_interval = slot_duration / 20.0
+
+    pc_values = getattr(cs, "PC_VALUES", [0.1, 0.4, 0.5, 0.7, 0.9])
+
+    print("MERGED (EDGE+COORD) SCALABILITY SIMULATION")
+
+    for pc in pc_values:
+        rem = max(0.0, 1.0 - pc)
+        cs.P_C = pc
+        cs.P1_PROB = 0.4 * rem
+        cs.P2_PROB = 0.5 * rem
+        cs.P3_PROB = 0.2 * rem
+        cs.P4_PROB = 0.1 * rem
+        print(f"\n### p_c = {pc:.2f} | P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
+
+        rep_traces_edge, rep_traces_coord = [], []
+        rep_edge_wait_means, rep_coord_wait_means, rep_cloud_wait_means = [], [], []
+        edge_servers_all, coord_servers_all = [], []
+        edge_scale_events, coord_scale_events = [], []
+
+        for rep in range(cs.REPLICATIONS):
+            print(f"  ★ Replica {rep + 1}")
+            plantSeeds(cs.SEED + rep)
+            seed = getSeed()
+
+            edge_wait_this_rep, coord_wait_this_rep, cloud_wait_this_rep = [], [], []
+            t_trace, edge_trace, coord_trace = [], [], []
+            t_offset = 0.0
+            last_edge_count, last_coord_count = None, None
+
+            for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
+                print(f"    ➤ Slot {slot_index} - λ = {lam:.5f} job/sec")
+                stop = slot_duration
+
+                res = edge_coord_scalability_simulation(stop=stop, forced_lambda=lam, slot_index=slot_index)
+                res["seed"] = seed
+                res["lambda"] = lam
+                res["slot"] = slot_index
+                res["pc"] = pc
+                res["p1"], res["p2"], res["p3"], res["p4"] = cs.P1_PROB, cs.P2_PROB, cs.P3_PROB, cs.P4_PROB
+                write_file_merged_scalability(res, file_name)
+
+                edge_wait_this_rep.append(res["edge_avg_wait"])
+                coord_wait_this_rep.append(res["coord_avg_wait"])
+                cloud_wait_this_rep.append(res["cloud_avg_wait"])
+                edge_servers_all.append(res["edge_server_number"])
+                coord_servers_all.append(res["coord_server_number"])
+
+                for (t_rel, s, _) in res.get("edge_scal_trace", []):
+                    t_abs = t_offset + t_rel
+                    t_trace.append(t_abs)
+                    edge_trace.append(s)
+                    if last_edge_count is None:
+                        last_edge_count = s
+                    elif s != last_edge_count:
+                        direction = "UP" if s > last_edge_count else "DOWN"
+                        edge_scale_events.append((slot_index, t_abs, direction, s))
+                        last_edge_count = s
+
+                for (t_rel, s, _) in res.get("coord_scal_trace", []):
+                    t_abs = t_offset + t_rel
+                    coord_trace.append(s)
+                    if last_coord_count is None:
+                        last_coord_count = s
+                    elif s != last_coord_count:
+                        direction = "UP" if s > last_coord_count else "DOWN"
+                        coord_scale_events.append((slot_index, t_abs, direction, s))
+                        last_coord_count = s
+
+                t_offset += slot_duration
+
+            if edge_wait_this_rep:
+                rep_edge_wait_means.append(sum(edge_wait_this_rep) / len(edge_wait_this_rep))
+            if coord_wait_this_rep:
+                rep_coord_wait_means.append(sum(coord_wait_this_rep) / len(coord_wait_this_rep))
+            if cloud_wait_this_rep:
+                rep_cloud_wait_means.append(sum(cloud_wait_this_rep) / len(cloud_wait_this_rep))
+
+            rep_traces_edge.append(list(zip(t_trace, edge_trace)))
+            rep_traces_coord.append(list(zip(t_trace[:len(coord_trace)], coord_trace)))
+
+        grid = [i * decision_interval for i in range(int(horizon / decision_interval) + 1)]
+
+        def step_value(trace_tv, t):
+            if not trace_tv:
+                return 1
+            v_last = trace_tv[0][1]
+            for (tt, vv) in trace_tv:
+                if tt <= t:
+                    v_last = vv
+                else:
+                    break
+            return v_last
+
+        avg_edge, avg_coord = [], []
+        for t in grid:
+            vals_e = [step_value(tr, t) for tr in rep_traces_edge]
+            vals_c = [step_value(tr, t) for tr in rep_traces_coord]
+            avg_edge.append(sum(vals_e) / max(1, len(vals_e)))
+            avg_coord.append(sum(vals_c) / max(1, len(vals_c)))
+
+        plt.figure()
+        plt.plot(grid, avg_edge, label="Edge servers (media repliche)")
+        plt.plot(grid, avg_coord, label="Coordinator servers (media repliche)")
+        plt.xlabel("Tempo")
+        plt.ylabel("Numero server")
+        plt.title(f"Andamento server nel tempo – pc={pc:.2f} (media su {cs.REPLICATIONS} repliche)")
+        plt.legend()
+        fig_path = os.path.join(output_dir, f"servers_over_time_pc_{str(pc).replace('.', '_')}.png")
+        plt.savefig(fig_path, dpi=150, bbox_inches="tight")
+        plt.close()
+        print(f"  Grafico scritto: {fig_path}")
+
+        print("\n--- REPORT CUMULATIVO ---")
+        if edge_servers_all:
+            print(f"Edge servers     -> min: {min(edge_servers_all)}, max: {max(edge_servers_all)}, avg: {sum(edge_servers_all)/len(edge_servers_all):.4f}")
+        if coord_servers_all:
+            print(f"Coordinator srv  -> min: {min(coord_servers_all)}, max: {max(coord_servers_all)}, avg: {sum(coord_servers_all)/len(coord_servers_all):.4f}")
+
+        m, ci = calculate_confidence_interval(rep_edge_wait_means)
+        print(f"Edge avg wait    -> {m:.4f} ± {ci:.4f} (95% CI)")
+        m, ci = calculate_confidence_interval(rep_cloud_wait_means)
+        print(f"Cloud avg wait   -> {m:.4f} ± {ci:.4f} (95% CI)")
+        m, ci = calculate_confidence_interval(rep_coord_wait_means)
+        print(f"Coord avg wait   -> {m:.4f} ± {ci:.4f} (95% CI)")
+
+        print("\nEventi scalabilità EDGE (tempo assoluto; slot λ):")
+        if edge_scale_events:
+            for slot_idx, t_abs, direction, new_count in edge_scale_events:
+                print(f"  t={t_abs:.1f}s  slot={slot_idx}  -> {direction} a {new_count} server")
+        else:
+            print("  Nessun cambiamento")
+
+        print("\nEventi scalabilità COORD (tempo assoluto; slot λ):")
+        if coord_scale_events:
+            for slot_idx, t_abs, direction, new_count in coord_scale_events:
+                print(f"  t={t_abs:.1f}s  slot={slot_idx}  -> {direction} a {new_count} server")
+        else:
+            print("  Nessun cambiamento")
+
+    print(f"\nCSV scritto: output/{file_name}")
+
+
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
     print_csv_legend()
     #stats_finite = start_lambda_scan_simulation()
-    stats_infinite = start_infinite_lambda_scan_simulation()
+    #stats_infinite = start_infinite_lambda_scan_simulation()
     #start_edge_scalability_simulation()
     #start_coord_scalability_simulation()
+    start_scalability_simulation()
 

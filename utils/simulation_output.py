@@ -150,6 +150,51 @@ infinite_header = [
     # conteggi per classi
     "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C"
 ]
+HEADER_MERGED_SCALABILITY = [
+    "seed","lambda","slot",
+    # Edge
+    "edge_server_number","edge_avg_wait","edge_avg_delay",
+    "edge_L","edge_Lq","edge_service_time_mean","edge_avg_busy_servers","edge_throughput",
+    # Cloud
+    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq","cloud_service_time_mean",
+    "cloud_avg_busy_servers","cloud_throughput",
+    # Coordinator
+    "coord_server_number","coord_avg_wait","coord_avg_delay","coord_L","coord_Lq",
+    "coord_service_time_mean","coord_utilization","coord_throughput",
+    # Meta probabilità
+    "pc","p1","p2","p3","p4",
+    # Tracce serializzate
+    "edge_scal_trace","coord_scal_trace"
+]
+
+def clear_merged_scalability_file(file_name: str):
+    os.makedirs(file_path, exist_ok=True)
+    path = os.path.join(file_path, file_name)
+    with open(path, 'w', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=HEADER_MERGED_SCALABILITY)
+        writer.writeheader()
+
+def write_file_merged_scalability(results: dict, file_name: str):
+    os.makedirs(file_path, exist_ok=True)
+    path = os.path.join(file_path, file_name)
+
+    row = dict(results)  # copia
+    # serializza tracce come JSON compatti
+    for k in ("edge_scal_trace", "coord_scal_trace"):
+        if k in row and not isinstance(row[k], str):
+            row[k] = json.dumps(row[k], separators=(",", ":"))
+
+    # garantisci che tutte le chiavi esistano
+    for key in HEADER_MERGED_SCALABILITY:
+        row.setdefault(key, None)
+
+    file_exists = os.path.isfile(path)
+    with open(path, 'a', newline='', encoding='utf-8') as f:
+        writer = csv.DictWriter(f, fieldnames=HEADER_MERGED_SCALABILITY)
+        if not file_exists:
+            writer.writeheader()
+        writer.writerow({k: row.get(k) for k in HEADER_MERGED_SCALABILITY})
+
 
 def clear_infinite_file(file_name):
     path = os.path.join(file_path, file_name)
@@ -216,7 +261,6 @@ def write_file_edge_scalability(results, file_name):
         writer.writerow(results_serialized)
 
 
-file_path = "output/"  # assicurati che questa variabile sia definita
 
 
 def clear_edge_scalability_file(file_name):
