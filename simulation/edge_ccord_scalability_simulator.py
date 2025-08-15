@@ -157,6 +157,12 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
         if stats.t.current - last_checkpoint_coord >= decision_interval:
             obs_time_c = max(1e-12, (stats.t.current - last_checkpoint_coord) * max(1, cs.COORD_EDGE_SERVERS))
             utilization_c = stats.area_coord.service / obs_time_c
+
+            # 👇 Debug print qui
+            print(f"[DEBUG][t={stats.t.current:.1f}] Utilizzazione COORD finestra = {utilization_c:.3f} "
+                  f"(server={cs.COORD_EDGE_SERVERS}, obs_time_c={obs_time_c:.3f}, "
+                  f"service_area={stats.area_coord.service:.3f})")
+
             coord_scal_trace.append((stats.t.current, cs.COORD_EDGE_SERVERS, utilization_c))
             if utilization_c > cs.UTILIZATION_UPPER and cs.COORD_EDGE_SERVERS < cs.COORD_SERVERS_MAX:
                 cs.COORD_EDGE_SERVERS += 1

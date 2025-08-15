@@ -15,15 +15,11 @@ from matplotlib import pyplot as plt
 import utils.constants as cs
 from simulation.edge_ccord_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
-from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
-    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, write_scalability_trace, clear_infinite_file, \
-    write_infinite_row, plot_infinite_analysis, write_file_merged_scalability, clear_merged_scalability_file
-from utils.simulation_stats import ReplicationStats
-from utils.sim_utils import append_stats, set_pc_and_update_probs, calculate_confidence_interval
+from utils.simulation_output import write_file, clear_file, print_simulation_stats, \
+    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, \
+    write_infinite_row,  write_file_merged_scalability, clear_merged_scalability_file
+from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs
 from simulation.edge_scalability_simulator import edge_scalability_simulation
-from utils.simulation_output import write_file_edge_scalability, clear_edge_scalability_file
-from utils.sim_utils import append_edge_scalability_stats
-from utils.simulation_stats import ReplicationStats
 from utils.simulation_stats import ReplicationStats
 from simulation.coordinator_scalability_simulator import coordinator_scalability_simulation   # ← NEW
 from utils.simulation_output import (
@@ -33,7 +29,7 @@ from utils.simulation_output import (
 from utils.sim_utils import append_edge_scalability_stats, append_coord_scalability_stats     # ← NEW
 
 
-from libraries.rngs import plantSeeds, selectStream, getSeed
+from libraries.rngs import plantSeeds, getSeed
 
 def start_lambda_scan_simulation():
     replicationStats = ReplicationStats()
@@ -118,7 +114,7 @@ def start_infinite_lambda_scan_simulation():
     print("\nINFINITE SIMULATION - Aeroporto Ciampino")
 
     file_name = "infinite_statistics.csv"
-    clear_infinite_file(file_name)
+    clear_file(file_name)
 
     replicationStats = ReplicationStats()
 
@@ -141,7 +137,6 @@ def start_infinite_lambda_scan_simulation():
             append_stats(replicationStats, results, batch_stats)
 
     print_simulation_stats(replicationStats, "lambda_scan_infinite")
-    plot_infinite_analysis()
     return replicationStats
 
 def start_coord_scalability_simulation():
@@ -329,13 +324,11 @@ def start_scalability_simulation():
     print("MERGED (EDGE+COORD) SCALABILITY SIMULATION")
 
     for pc in pc_values:
-        rem = max(0.0, 1.0 - pc)
-        cs.P_C = pc
-        cs.P1_PROB = 0.4 * rem
-        cs.P2_PROB = 0.5 * rem
-        cs.P3_PROB = 0.2 * rem
-        cs.P4_PROB = 0.1 * rem
-        print(f"\n### p_c = {pc:.2f} | P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
+        set_pc_and_update_probs(pc)  # imposta cs.P_C, cs.P_COORD e le condizionate P1..P4
+        s = cs.P1_PROB + cs.P2_PROB + cs.P3_PROB + cs.P4_PROB
+
+        print(f"\n### p_c = {pc:.2f} (P_COORD={cs.P_COORD:.2f}) | "
+              f"P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
 
         rep_traces_edge, rep_traces_coord = [], []
         rep_edge_wait_means, rep_coord_wait_means, rep_cloud_wait_means = [], [], []

@@ -20,20 +20,30 @@ from fractions import Fraction
 # helper function per ricalcolare le probabilità dei pacchetti a partire da p_c
 # -------------------------------------------------------------------------------
 
-BASE_P = getattr(cs, "P_BASES", (0.20, 0.25, 0.10, 0.05))  # opzionale: puoi definire P_BASES in constants.py
+# utils/sim_utils.py
+BASE_P = getattr(cs, "P_BASES", (0.20, 0.25, 0.10, 0.05))
 
 def set_pc_and_update_probs(pc: float):
     pc = max(0.0, min(1.0, float(pc)))
     cs.P_C = pc
-    cs.P_COORD = 1.0 - cs.P_C
+    cs.P_COORD = 1.0 - pc
 
-    denom = cs.P_COORD if cs.P_COORD > 0 else 1.0
-    b1, b2, b3, b4 = BASE_P
+    b1,b2,b3,b4 = BASE_P
+    base_sum = max(1e-12, b1+b2+b3+b4)  # 0.60
 
-    cs.P1_PROB = b1 / denom
-    cs.P2_PROB = b2 / denom
-    cs.P3_PROB = b3 / denom
-    cs.P4_PROB = b4 / denom
+    # condizionate (somma=1)
+    p1c = b1/base_sum; p2c = b2/base_sum; p3c = b3/base_sum; p4c = b4/base_sum
+    # E* (somma=1 - pc) -> queste finiscono in cs.*
+    cs.P1_PROB = cs.P_COORD * p1c
+    cs.P2_PROB = cs.P_COORD * p2c
+    cs.P3_PROB = cs.P_COORD * p3c
+    cs.P4_PROB = cs.P_COORD * p4c
+
+    # debug
+    s_eff = cs.P1_PROB + cs.P2_PROB + cs.P3_PROB + cs.P4_PROB
+    print(f"[DEBUG] pc={pc:.2f} | P5={cs.P_C:.3f} | sum(E*)={s_eff:.3f} (atteso={cs.P_COORD:.3f})")
+
+
 #---------------------------------------------------------------------------------
 
 def safe_stdev(data, xbar=None):
