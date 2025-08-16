@@ -283,6 +283,11 @@ def return_stats(stats, t, seed):
         'cloud_avg_wait': cloud_W,
         'coord_avg_wait': coord_W,
 
+        # tempi di coda e risposta medi per classe é
+        'edge_E_avg_delay': (stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0,
+        'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) \
+                               + cs.EDGE_SERVICE_E,
+
         # nuove: tempi di attesa in coda
         'edge_avg_delay': edge_Wq,
         'cloud_avg_delay': cloud_Wq,

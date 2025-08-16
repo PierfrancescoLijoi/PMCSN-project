@@ -463,9 +463,9 @@ if __name__ == "__main__":
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
     print_csv_legend()
-    #stats_finite = start_lambda_scan_simulation()
-    #stats_infinite = start_infinite_lambda_scan_simulation()
-    #start_edge_scalability_simulation()
-    #start_coord_scalability_simulation()
+    stats_finite = start_lambda_scan_simulation()
+    stats_infinite = start_infinite_lambda_scan_simulation()
+    start_edge_scalability_simulation()
+    start_coord_scalability_simulation()
     start_scalability_simulation()
 

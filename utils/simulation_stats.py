@@ -125,6 +125,10 @@ class ReplicationStats:
         self.lambdas = []
         self.slots = []
 
+        # tempi medi attesa e risposta classe E
+        self.edge_E_delay_times = []
+        self.edge_E_response_times = []
+
         # tempi di risposta (già esistenti)
         self.edge_wait_times = []
         self.cloud_wait_times = []

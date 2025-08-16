@@ -28,6 +28,7 @@ header = [
     # tempi
     "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
     "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
+    "edge_E_avg_delay", "edge_E_avg_response",
 
     # L, Lq
     "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
@@ -54,6 +55,7 @@ header_infinite =[
     # tempi
     "edge_avg_wait", "cloud_avg_wait", "coord_avg_wait",
     "edge_avg_delay", "cloud_avg_delay", "coord_avg_delay",
+     "edge_E_avg_delay", "edge_E_avg_response",
 
     # L, Lq
     "edge_L", "edge_Lq", "cloud_L", "cloud_Lq", "coord_L", "coord_Lq",
@@ -84,6 +86,7 @@ header_edge_scalability = [
     "edge_server_service",
     "edge_server_utilization",
     "edge_weight_utilization",
+    "edge_E_avg_delay", "edge_E_avg_response",
 
     # Cloud
     "cloud_avg_wait","cloud_avg_delay",
@@ -113,6 +116,7 @@ header_coord_scalability = [
     "edge_service_time_mean",
     "edge_avg_busy_servers",
     "edge_throughput",
+    "edge_E_avg_delay", "edge_E_avg_response",
 
     # Cloud
     "cloud_avg_wait","cloud_avg_delay",
@@ -139,6 +143,7 @@ infinite_header = [
     # tempi medi per nodo
     "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
     "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
+    "edge_E_avg_delay", "edge_E_avg_response",
     # L, Lq
     "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
     # utilizzazioni / busy servers
@@ -155,6 +160,7 @@ HEADER_MERGED_SCALABILITY = [
     # Edge
     "edge_server_number","edge_avg_wait","edge_avg_delay",
     "edge_L","edge_Lq","edge_service_time_mean","edge_avg_busy_servers","edge_throughput",
+    "edge_E_avg_delay", "edge_E_avg_response",
     # Cloud
     "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq","cloud_service_time_mean",
     "cloud_avg_busy_servers","cloud_throughput",
@@ -356,6 +362,10 @@ def build_summary_dict(stats, sim_type):
     add("Cloud Server - Average delay (queue)", getattr(stats, 'cloud_delay_times', []))
     add("Coordinator Edge - Average delay (queue)", getattr(stats, 'coord_delay_times', []))
 
+    # attese in coda e rispsota classe E edge
+    add("Edge Node (Class E) - Average delay", stats.edge_E_delay_times)
+    add("Edge Node (Class E) - Average response", stats.edge_E_response_times)
+
     # L e Lq
     add("Edge Node - Avg number in node (L)", getattr(stats, 'edge_L', []))
     add("Edge Node - Avg number in queue (Lq)", getattr(stats, 'edge_Lq', []))
@@ -426,6 +436,10 @@ def print_simulation_stats(stats, sim_type):
     _print_ci("Edge Node - Average wait time",  stats.edge_wait_times)
     _print_ci("Cloud Server - Average wait time", stats.cloud_wait_times)
     _print_ci("Coordinator Edge - Average wait time", stats.coord_wait_times)
+
+    # tempi di e attesa risposta per job di classe E
+    _print_ci("Edge Node (Class E) - Avg delay", stats.edge_E_delay_times)
+    _print_ci("Edge Node (Class E) - Avg response", stats.edge_E_response_times)
 
     # nuovi: tempi d'attesa in coda
     _print_ci("Edge Node - Average delay (queue)",  getattr(stats, 'edge_delay_times', []))

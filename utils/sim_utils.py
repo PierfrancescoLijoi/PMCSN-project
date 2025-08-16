@@ -238,6 +238,11 @@ def append_stats(replicationStats, results, stats):
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
 
+
+    # tempi di attesa e risposta  per job di classe E
+    replicationStats.edge_E_delay_times.append(results['edge_E_avg_delay'])
+    replicationStats.edge_E_response_times.append(results['edge_E_avg_response'])
+
     # nuovi: code
     replicationStats.edge_delay_times.append(results['edge_avg_delay'])
     replicationStats.cloud_delay_times.append(results['cloud_avg_delay'])
