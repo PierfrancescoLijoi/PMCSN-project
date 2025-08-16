@@ -15,6 +15,11 @@ SEED = 123456789
 REPLICATIONS = 100
 
 
+EDGE_SERVERS = 2  # dual-core fisso per il modello base
+FEEDBACK_SERVICE = 1.0  # 0.5 * 2 (singolo server FIFO)
+EDGE_SERVICE_E = 2.0  # 0.5 * 4
+
+
 # -------------------------
 # Orizzonte temporale
 # -------------------------

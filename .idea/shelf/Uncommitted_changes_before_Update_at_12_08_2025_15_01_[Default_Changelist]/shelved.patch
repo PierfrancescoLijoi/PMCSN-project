@@ -1,0 +1,727 @@
+Index: utils/scalability_plot_maker.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/utils/scalability_plot_maker.py b/utils/scalability_plot_maker.py
+new file mode 100644
+--- /dev/null	(date 1754995129532)
++++ b/utils/scalability_plot_maker.py	(date 1754995129532)
+@@ -0,0 +1,275 @@
++#!/usr/bin/env python3
++# -*- coding: utf-8 -*-
++
++"""
++Scalability Plot Maker — Chiaro e leggibile
++
++OBIETTIVO
++- Mostrare, per ciascun λ, come il tempo di attesa medio (edge_avg_wait) varia
++  al crescere del numero di nodi Edge (edge_server_number).
++- Esaltare:
++  1) Trend medio (linea collegando i #nodi) con intervalli di confidenza 95%
++  2) Benefici marginali (delta) passando da n nodi a n+1 nodi
++  3) Variabilità per #nodi (opzionale: boxplot per slot λ)
++
++USO SEMPLICE (default):
++    python utils/scalability_plot_maker.py
++
++USO PERSONALIZZATO:
++    python utils/scalability_plot_maker.py ^
++        --csv output/edge_scalability_statistics.csv ^
++        --out output/plots_scalability_lambda ^
++        --lambda-col lambda ^
++        --x-col edge_server_number ^
++        --y-col edge_avg_wait ^
++        --with-boxplot
++"""
++
++import os
++import sys
++import argparse
++from typing import Optional, List
++import numpy as np
++import pandas as pd
++import matplotlib.pyplot as plt
++from math import sqrt
++
++
++# -------------------------------
++# Utilità statistiche
++# -------------------------------
++
++def ensure_numeric(series: pd.Series) -> pd.Series:
++    return pd.to_numeric(series, errors="coerce")
++
++def ci95_halfwidth(values: np.ndarray) -> float:
++    """Half-width CI95% della media usando z≈1.96 (ok per n≥30; per n piccoli è indicativa)."""
++    n = len(values)
++    if n <= 1:
++        return 0.0
++    sd = float(np.std(values, ddof=1))
++    return 1.96 * sd / sqrt(n)
++
++
++# -------------------------------
++# Core
++# -------------------------------
++
++def build_summary(df: pd.DataFrame, x_col: str, y_col: str, lambda_col: str) -> pd.DataFrame:
++    """
++    Aggrega per (lambda, #nodi): mean, ci95, count, median.
++    Ritorna un DataFrame ordinato, pronto per plotting e report.
++    """
++    parts = []
++    for lam, g_lam in df.groupby(lambda_col):
++        for x, g_x in g_lam.groupby(x_col):
++            y = g_x[y_col].to_numpy()
++            parts.append({
++                lambda_col: lam,
++                x_col: x,
++                "mean": float(np.mean(y)),
++                "median": float(np.median(y)),
++                "count": int(len(y)),
++                "ci95": ci95_halfwidth(y),
++            })
++    out = pd.DataFrame(parts)
++    if out.empty:
++        return out
++    out = out.sort_values([lambda_col, x_col]).reset_index(drop=True)
++    return out
++
++
++def print_marginal_benefits(summary: pd.DataFrame, x_col: str, lambda_col: str):
++    """
++    Stampa i benefici marginali (delta medio di attesa) aggiungendo un nodo:
++    Δ = mean_wait(n) - mean_wait(n+1)  (positivo = miglioramento).
++    """
++    if summary.empty:
++        print("Nessun dato per calcolare i benefici marginali.")
++        return
++    print("\n== Benefici marginali (Δ attesa media passando da n a n+1 nodi) ==")
++    for lam, g in summary.groupby(lambda_col):
++        g = g.sort_values(x_col)
++        deltas = []
++        xs = g[x_col].tolist()
++        means = g["mean"].tolist()
++        for i in range(len(xs) - 1):
++            delta = means[i] - means[i + 1]
++            deltas.append((xs[i], xs[i + 1], delta))
++        print(f"λ={lam}:")
++        if deltas:
++            for a, b, d in deltas:
++                print(f"  {a}→{b} nodi: Δ={d:.6f} (positivo=attesa diminuisce)")
++        else:
++            print("  Solo un valore di nodi: impossibile valutare il trend.")
++
++
++def plot_line_with_ci_per_lambda(summary: pd.DataFrame,
++                                 out_dir: str,
++                                 x_col: str,
++                                 y_label: str,
++                                 lambda_col: str):
++    """
++    Per ogni λ crea un grafico:
++    - X: #nodi (discreto)
++    - Y: media attesa, con barre CI95%
++    - Linea collega i punti in ordine crescente di #nodi
++    - Annotazione del numero di campioni per punto
++    """
++    os.makedirs(out_dir, exist_ok=True)
++    if summary.empty:
++        print("Nessun dato da plottare.")
++        return
++
++    for lam, g in summary.groupby(lambda_col):
++        g = g.sort_values(x_col)
++
++        plt.figure(figsize=(10, 6))
++        # Linea delle medie
++        plt.plot(g[x_col].to_numpy(), g["mean"].to_numpy(), marker="o", linewidth=2)
++
++        # Barre di errore (CI95%)
++        plt.errorbar(
++            g[x_col].to_numpy(),
++            g["mean"].to_numpy(),
++            yerr=g["ci95"].to_numpy(),
++            fmt="none",
++            elinewidth=1,
++            capsize=3
++        )
++
++        # Annotazioni: n (conteggio) sopra ad ogni punto
++        for xi, yi, n in zip(g[x_col], g["mean"], g["count"]):
++            plt.annotate(f"n={n}", (xi, yi), textcoords="offset points", xytext=(0, 8), ha="center", fontsize=9)
++
++        plt.xlabel(x_col)
++        plt.ylabel(y_label)
++        plt.title(f"Impatto della scalabilità (Edge) sul tempo di attesa — λ={lam}")
++        plt.grid(True)
++
++        out_path = os.path.join(out_dir, f"scalability_lambda_{str(lam).replace('.', '_')}.png")
++        plt.savefig(out_path, dpi=150, bbox_inches="tight")
++        plt.close()
++
++
++def plot_optional_boxplots(df: pd.DataFrame,
++                           out_dir: str,
++                           x_col: str,
++                           y_col: str,
++                           lambda_col: str):
++    """
++    (Opzionale) Per ogni λ, boxplot dei tempi di attesa raggruppati per #nodi.
++    Utile per mostrare la variabilità (dispersione).
++    """
++    os.makedirs(out_dir, exist_ok=True)
++    for lam, g in df.groupby(lambda_col):
++        g = g.copy()
++        levels = sorted(g[x_col].dropna().unique().tolist())
++        if not levels:
++            continue
++        data = [g.loc[g[x_col] == lv, y_col].dropna().to_numpy() for lv in levels]
++
++        plt.figure(figsize=(10, 6))
++        plt.boxplot(data, labels=[str(lv) for lv in levels], showmeans=True)
++        plt.xlabel(x_col)
++        plt.ylabel(y_col)
++        plt.title(f"Variabilità del tempo di attesa per #nodi — λ={lam}")
++        plt.grid(True)
++
++        out_path = os.path.join(out_dir, f"boxplot_lambda_{str(lam).replace('.', '_')}.png")
++        plt.savefig(out_path, dpi=150, bbox_inches="tight")
++        plt.close()
++
++
++def run(csv_path: str,
++        out_dir: str,
++        x_col: str,
++        y_col: str,
++        lambda_col: str,
++        with_boxplot: bool):
++
++    if not os.path.isfile(csv_path):
++        raise FileNotFoundError(f"CSV non trovato: {csv_path}")
++
++    df = pd.read_csv(csv_path)
++
++    required = {"seed", x_col, y_col, lambda_col}
++    missing = [c for c in required if c not in df.columns]
++    if missing:
++        raise ValueError(f"Mancano colonne richieste nel CSV: {missing}")
++
++    # Cast numerici
++    df[x_col] = ensure_numeric(df[x_col])
++    df[y_col] = ensure_numeric(df[y_col])
++    df[lambda_col] = ensure_numeric(df[lambda_col])
++
++    # Drop NA essenziali
++    df = df.dropna(subset=[x_col, y_col, lambda_col])
++
++    # Summary per plotting
++    summary = build_summary(df, x_col=x_col, y_col=y_col, lambda_col=lambda_col)
++
++    # Salva summary per analisi
++    os.makedirs(out_dir, exist_ok=True)
++    summary_path = os.path.join(out_dir, "scalability_summary.csv")
++    summary.to_csv(summary_path, index=False)
++
++    # Plot principali (linea + CI)
++    plot_line_with_ci_per_lambda(
++        summary=summary,
++        out_dir=out_dir,
++        x_col=x_col,
++        y_label=y_col,
++        lambda_col=lambda_col
++    )
++
++    # Benefici marginali a console
++    print_marginal_benefits(summary, x_col=x_col, lambda_col=lambda_col)
++
++    # Opzionale: boxplot
++    if with_boxplot:
++        plot_optional_boxplots(
++            df=df,
++            out_dir=os.path.join(out_dir, "boxplots"),
++            x_col=x_col,
++            y_col=y_col,
++            lambda_col=lambda_col
++        )
++
++    print(f"\n✅ Grafici e report salvati in: {out_dir}")
++    print(f"   - CSV riassuntivo: {summary_path}")
++
++
++# -------------------------------
++# CLI
++# -------------------------------
++
++def parse_args(argv: Optional[List[str]] = None) -> argparse.Namespace:
++    p = argparse.ArgumentParser()
++    p.add_argument("--csv", default="output/edge_scalability_statistics.csv",
++                   help="Percorso al CSV (default: output/edge_scalability_statistics.csv)")
++    p.add_argument("--out", default="output/plots_scalability_lambda",
++                   help="Cartella di output (default: output/plots_scalability_lambda)")
++    p.add_argument("--lambda-col", default="lambda",
++                   help="Nome colonna per λ (default: lambda)")
++    p.add_argument("--x-col", default="edge_server_number",
++                   help="Asse X: numero di nodi Edge (default: edge_server_number)")
++    p.add_argument("--y-col", default="edge_avg_wait",
++                   help="Asse Y: tempo di attesa medio (default: edge_avg_wait)")
++    p.add_argument("--with-boxplot", action="store_true",
++                   help="Se presente, genera anche boxplot di variabilità per λ.")
++    return p.parse_args(argv)
++
++
++def main():
++    args = parse_args(sys.argv[1:])
++    run(csv_path=args.csv,
++        out_dir=args.out,
++        x_col=args.x_col,
++        y_col=args.y_col,
++        lambda_col=args.lambda_col,
++        with_boxplot=args.with_boxplot)
++
++
++if __name__ == "__main__":
++    main()
+Index: main.py
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+>\"\"\"\r\nmain.py\r\n---------\r\nQuesto è il file principale che avvia la simulazione per il modello standard\r\ndescritto nel documento PMCSN Project (Luglio 2025).\r\n\r\nRiferimento: Sezione \"Modello computazionale\" del documento.\r\nLa simulazione segue un approccio next-event-driven con orizzonte finito\r\n(transiente), come definito a pagina 8–10 del testo allegato.\r\n\"\"\"\r\n\r\nimport utils.constants as cs\r\nfrom simulation.simulator import finite_simulation, infinite_simulation\r\nfrom utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \\\r\n    plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, write_scalability_trace\r\nfrom utils.simulation_stats import ReplicationStats\r\nfrom utils.sim_utils import append_stats\r\nfrom simulation.edge_scalability_simulator import edge_scalability_simulation\r\nfrom utils.simulation_output import write_file_edge_scalability, clear_edge_scalability_file\r\nfrom utils.sim_utils import append_edge_scalability_stats\r\nfrom utils.simulation_stats import ReplicationStats\r\nfrom utils.simulation_stats import ReplicationStats\r\nfrom simulation.coordinator_scalability_simulator import coordinator_scalability_simulation   # ← NEW\r\nfrom utils.simulation_output import (\r\n    write_file_edge_scalability, clear_edge_scalability_file,\r\n    write_file_coord_scalability, clear_coord_scalability_file      # ← NEW\r\n)\r\nfrom utils.sim_utils import append_edge_scalability_stats, append_coord_scalability_stats     # ← NEW\r\n\r\n\r\nfrom libraries.rngs import plantSeeds, selectStream, getSeed\r\n\r\ndef start_lambda_scan_simulation():\r\n    replicationStats = ReplicationStats()\r\n    print(\"LAMBDA SCAN SIMULATION - Aeroporto Ciampino\")\r\n\r\n    file_name = \"finite_statistics.csv\"\r\n    clear_file(file_name)\r\n\r\n    # Ciclo sulle repliche\r\n    for rep in range(cs.REPLICATIONS):\r\n        # Inizializza il seed per questa replica\r\n        plantSeeds(cs.SEED + rep)\r\n        base_seed = getSeed()\r\n        print(f\"\\n★ Replica {rep+1} con seed base = {base_seed}\")\r\n\r\n        # Ciclo su tutti i λ\r\n        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):\r\n            print(f\"\\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})\")\r\n\r\n            stop = cs.SLOT_DURATION\r\n            results, stats = finite_simulation(stop, forced_lambda=lam)\r\n\r\n            results['lambda'] = lam\r\n            results['slot'] = lam_index\r\n            results['seed'] = base_seed  # forza stesso seed nel CSV\r\n            write_file(results, file_name)\r\n\r\n            append_stats(replicationStats, results, stats)\r\n\r\n    print_simulation_stats(replicationStats, \"lambda_scan\")\r\n\r\n    if cs.TRANSIENT_ANALYSIS == 1:\r\n        # Analisi per seed (già implementata)\r\n        plot_multi_lambda_per_seed(\r\n            replicationStats.edge_wait_interval,\r\n            replicationStats.seeds,\r\n            \"edge_node\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n        plot_multi_lambda_per_seed(\r\n            replicationStats.cloud_wait_interval,\r\n            replicationStats.seeds,\r\n            \"cloud_server\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n        plot_multi_lambda_per_seed(\r\n            replicationStats.coord_wait_interval,\r\n            replicationStats.seeds,\r\n            \"coord_server_edge\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n\r\n        # Analisi per λ\r\n        plot_multi_seed_per_lambda(\r\n            replicationStats.edge_wait_interval,\r\n            replicationStats.seeds,\r\n            \"edge_node\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n        plot_multi_seed_per_lambda(\r\n            replicationStats.cloud_wait_interval,\r\n            replicationStats.seeds,\r\n            \"cloud_server\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n        plot_multi_seed_per_lambda(\r\n            replicationStats.coord_wait_interval,\r\n            replicationStats.seeds,\r\n            \"coord_server_edge\", \"lambda_scan\",\r\n            replicationStats.lambdas,\r\n            replicationStats.slots\r\n        )\r\n\r\n    return replicationStats\r\n\r\ndef start_infinite_lambda_scan_simulation():\r\n    print(\"\\nINFINITE SIMULATION - Aeroporto Ciampino\")\r\n\r\n    file_name = \"infinite_statistics.csv\"\r\n    clear_file(file_name)\r\n\r\n    replicationStats = ReplicationStats()\r\n\r\n    # un solo seed di base per l’infinite horizon\r\n    plantSeeds(cs.SEED)\r\n    base_seed = getSeed()\r\n    print(f\"\\n★ Infinite horizon con seed base = {base_seed}\")\r\n\r\n    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):\r\n        print(f\"\\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec\")\r\n\r\n        batch_stats = infinite_simulation(forced_lambda=lam)\r\n\r\n        for batch_index, results in enumerate(batch_stats.results):\r\n            results['lambda'] = lam\r\n            results['slot'] = lam_index\r\n            results['seed'] = base_seed\r\n            write_file(results, file_name)\r\n            append_stats(replicationStats, results, batch_stats)\r\n\r\n    print_simulation_stats(replicationStats, \"lambda_scan_infinite\")\r\n    return replicationStats\r\n\r\ndef start_coord_scalability_simulation():\r\n    \"\"\"\r\n    Coordinator Scalability:\r\n    - Legge output/edge_scalability_statistics.csv, calcola per ciascun λ la MEDIA dei server Edge usati (per slot).\r\n    - Usa quella media (arrotondata, min 1) come N fisso di server Edge.\r\n    - Scala dinamicamente i server del Coordinator con le stesse soglie di utilizzo degli Edge.\r\n    - Esporta CSV/JSON/TXT come fatto per Edge.\r\n    \"\"\"\r\n    import os\r\n    import pandas as pd\r\n    import utils.constants as cs\r\n    from libraries.rngs import plantSeeds, getSeed\r\n\r\n    replicationStats = ReplicationStats()\r\n    file_name = \"coord_scalability_statistics.csv\"\r\n    clear_coord_scalability_file(file_name)\r\n\r\n    # carica CSV Edge già generato\r\n    path_edge_csv = os.path.join(\"output\", \"edge_scalability_statistics.csv\")\r\n    if not os.path.isfile(path_edge_csv):\r\n        raise FileNotFoundError(\"Non trovo output/edge_scalability_statistics.csv. Esegui prima la scalabilità Edge.\")\r\n\r\n    df = pd.read_csv(path_edge_csv)\r\n\r\n    # media server per slot di λ (robusto a floating di λ)\r\n    slot_to_avg = df.groupby('slot')['edge_server_number'].mean().to_dict()\r\n\r\n    print(\"COORDINATOR SCALABILITY SIMULATION\")\r\n\r\n    for rep in range(cs.REPLICATIONS):\r\n        print(f\"\\n★ Replica {rep + 1}\")\r\n        plantSeeds(cs.SEED + rep)\r\n        seed = getSeed()\r\n\r\n        for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):\r\n            print(f\" ➔ Slot {slot_index} - λ = {lam:.5f} job/sec\")\r\n            fixed_edge_servers = max(1, min(int(round(slot_to_avg.get(slot_index, 1))), cs.EDGE_SERVERS_MAX))\r\n\r\n            stop = cs.SLOT_DURATION\r\n            results, stats = coordinator_scalability_simulation(\r\n                stop, forced_lambda=lam, slot_index=slot_index, fixed_edge_servers=fixed_edge_servers\r\n            )\r\n\r\n            results['seed'] = seed\r\n            results['lambda'] = lam\r\n            results['slot'] = slot_index\r\n\r\n            write_file_coord_scalability(results, file_name)\r\n            append_coord_scalability_stats(replicationStats, results, stats)\r\n\r\n    from utils.simulation_output import print_simulation_stats\r\n    print_simulation_stats(replicationStats, \"coord_scalability\")\r\n\r\n    return replicationStats\r\n\r\n\r\ndef start_edge_scalability_simulation():\r\n    replicationStats = ReplicationStats()\r\n    file_name = \"edge_scalability_statistics.csv\"\r\n    clear_edge_scalability_file(file_name)\r\n\r\n    print(\"EDGE SCALABILITY SIMULATION\")\r\n\r\n    for rep in range(cs.REPLICATIONS):\r\n        print(f\"\\n★ Replica {rep + 1}\")\r\n        plantSeeds(cs.SEED + rep)\r\n        seed = getSeed()\r\n\r\n        for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):\r\n            print(f\" ➔ Slot {slot_index} - λ = {lam:.5f} job/sec\")\r\n\r\n            stop = cs.SLOT_DURATION\r\n            results, stats = edge_scalability_simulation(stop, forced_lambda=lam, slot_index=slot_index)\r\n\r\n            results['seed'] = seed\r\n            results['lambda'] = lam\r\n            results['slot'] = slot_index\r\n\r\n            write_file_edge_scalability(results, file_name)\r\n\r\n\r\n            append_edge_scalability_stats(replicationStats, results, stats)\r\n\r\n    print_simulation_stats(replicationStats, \"edge_scalability\")\r\n\r\n    return replicationStats\r\ndef print_csv_legend():\r\n    print(\"\\n=== CSV Columns Legend ===\\n\")\r\n\r\n    legend = {\r\n        # Identificativi simulazione\r\n        \"seed\": \"Identificativo del seme RNG usato per la replica (per riproducibilità).\",\r\n        \"slot\": \"Indice della fascia oraria (utile per scenari con λ variabile per slot).\",\r\n        \"lambda\": \"Tasso medio di arrivi impostato in quella replica (job/unità tempo).\",\r\n\r\n        # Tempi\r\n        \"edge_avg_wait\": \"Tempo medio di risposta W del nodo Edge (attesa + servizio).\",\r\n        \"cloud_avg_wait\": \"Tempo medio di risposta W del nodo Cloud.\",\r\n        \"coord_avg_wait\": \"Tempo medio di risposta W del nodo Coordinator.\",\r\n        \"edge_avg_delay\": \"Tempo medio di attesa in coda Wq del nodo Edge (senza servizio).\",\r\n        \"cloud_avg_delay\": \"Tempo medio di attesa in coda Wq del nodo Cloud.\",\r\n        \"coord_avg_delay\": \"Tempo medio di attesa in coda Wq del nodo Coordinator.\",\r\n\r\n        # Numero medio di job\r\n        \"edge_L\": \"Numero medio di job presenti nel nodo Edge (in coda + in servizio).\",\r\n        \"edge_Lq\": \"Numero medio di job in coda nel nodo Edge.\",\r\n        \"cloud_L\": \"Numero medio di job presenti nel nodo Cloud.\",\r\n        \"cloud_Lq\": \"Numero medio di job in coda nel nodo Cloud.\",\r\n        \"coord_L\": \"Numero medio di job presenti nel nodo Coordinator.\",\r\n        \"coord_Lq\": \"Numero medio di job in coda nel nodo Coordinator.\",\r\n\r\n        # Utilizzazione\r\n        \"edge_utilization\": \"Utilizzazione media aggregata del nodo Edge (area.service/T).\",\r\n        \"coord_utilization\": \"Utilizzazione media aggregata del nodo Coordinator.\",\r\n        \"cloud_avg_busy_servers\": \"Numero medio di server occupati nel Cloud (ρ in multi-server).\",\r\n\r\n        # Throughput\r\n        \"edge_throughput\": \"Tasso medio di completamenti X nel nodo Edge (job/unità tempo).\",\r\n        \"cloud_throughput\": \"Tasso medio di completamenti X nel nodo Cloud.\",\r\n        \"coord_throughput\": \"Tasso medio di completamenti X nel nodo Coordinator.\",\r\n\r\n        # Tempi di servizio medi osservati\r\n        \"edge_service_time_mean\": \"Tempo medio di servizio realizzato nel nodo Edge (1/μ osservato).\",\r\n        \"cloud_service_time_mean\": \"Tempo medio di servizio realizzato nel nodo Cloud.\",\r\n        \"coord_service_time_mean\": \"Tempo medio di servizio realizzato nel nodo Coordinator.\",\r\n\r\n        # Contatori job completati\r\n        \"count_E\": \"Numero di job di classe E completati.\",\r\n        \"count_E_P1\": \"Numero di job di classe E_P1 completati.\",\r\n        \"count_E_P2\": \"Numero di job di classe E_P2 completati.\",\r\n        \"count_E_P3\": \"Numero di job di classe E_P3 completati.\",\r\n        \"count_E_P4\": \"Numero di job di classe E_P4 completati.\",\r\n        \"count_C\": \"Numero di job di classe C completati.\",\r\n\r\n        # Legacy (vecchie metriche)\r\n        \"E_utilization\": (\r\n            \"Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE E \"\r\n            \"(cioè la singola coda/server che gestisce i job di tipo E nel modello). \"\r\n            \"Non include eventuali altri centri/server presenti nello stesso nodo Edge \"\r\n            \"che servono job di altre classi (es. P1, P2...). \"\r\n            \"Per questo motivo, se il nodo Edge ospita più code/server per classi diverse, \"\r\n            \"questo valore può essere significativamente più basso rispetto a 'edge_utilization', \"\r\n            \"che invece considera l'uso complessivo di tutti i server del nodo Edge.\"\r\n        ),\r\n        \"C_utilization\": (\r\n            \"Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE C \"\r\n            \"(cioè la singola coda/server che gestisce i job di tipo C nel modello). \"\r\n            \"Non include eventuali altri centri/server presenti nello stesso nodo Coordinator \"\r\n            \"che servono job di altre classi o funzioni. \"\r\n            \"Se il Coordinator ospita più code o server per tipi di job diversi, \"\r\n            \"questo valore può essere più basso rispetto a 'coord_utilization', \"\r\n            \"che tiene conto di tutti i server presenti nel nodo Coordinator.\"\r\n        )\r\n\r\n    }\r\n    for name, desc in legend.items():\r\n        print(f\"{name:30} -> {desc}\")\r\n\r\nif __name__ == \"__main__\":\r\n    \"\"\"\r\n    Avvio della simulazione quando il file viene eseguito direttamente.\r\n    \"\"\"\r\n    print_csv_legend()\r\n    stats_finite = start_lambda_scan_simulation()\r\n    stats_infinite = start_infinite_lambda_scan_simulation()\r\n    start_edge_scalability_simulation()\r\n    start_coord_scalability_simulation()\r\n\r\n
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/main.py b/main.py
+--- a/main.py	(revision 55e8f1caa66224a481e27db5cef896c282c31b43)
++++ b/main.py	(date 1754992499356)
+@@ -8,9 +8,11 @@
+ La simulazione segue un approccio next-event-driven con orizzonte finito
+ (transiente), come definito a pagina 8–10 del testo allegato.
+ """
++import pandas as pd
+ 
+ import utils.constants as cs
+ from simulation.simulator import finite_simulation, infinite_simulation
++from utils.scalability_plot_maker import  plot_edge_steps_allseeds
+ from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_analysis, \
+     plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, write_scalability_trace
+ from utils.simulation_stats import ReplicationStats
+@@ -299,9 +301,11 @@
+     """
+     Avvio della simulazione quando il file viene eseguito direttamente.
+     """
+-    print_csv_legend()
+-    stats_finite = start_lambda_scan_simulation()
+-    stats_infinite = start_infinite_lambda_scan_simulation()
+-    start_edge_scalability_simulation()
+-    start_coord_scalability_simulation()
++    #print_csv_legend()
++    #stats_finite = start_lambda_scan_simulation()
++    #stats_infinite = start_infinite_lambda_scan_simulation()
++    #start_edge_scalability_simulation()
++    #start_coord_scalability_simulation()
++    df = pd.read_csv("output/edge_scalability_statistics.csv")
++    plot_edge_steps_allseeds(df)
+ 
+Index: .idea/workspace.xml
+IDEA additional info:
+Subsystem: com.intellij.openapi.diff.impl.patch.BaseRevisionTextPatchEP
+<+><?xml version=\"1.0\" encoding=\"UTF-8\"?>\r\n<project version=\"4\">\r\n  <component name=\"AutoImportSettings\">\r\n    <option name=\"autoReloadType\" value=\"SELECTIVE\" />\r\n  </component>\r\n  <component name=\"ChangeListManager\">\r\n    <list default=\"true\" id=\"cb0572bf-3a6b-4836-9234-641477405e06\" name=\"Default Changelist\" comment=\"fix plots\">\r\n      <change beforePath=\"$PROJECT_DIR$/.idea/workspace.xml\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/.idea/workspace.xml\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/main.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/main.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/edge_scalability_statistics.csv\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/infinite_statistics.csv\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/lambda_scan_statistics.csv\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1029757719.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1066217489.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1072515376.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1102677259.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1108975146.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1139137029.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1145434916.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1175596799.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1181894686.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1218354456.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed123233804.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed123456789.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1254814226.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1261112113.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1291273996.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed129531691.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1297571883.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1327733766.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1334031653.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1364193536.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1370491423.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed13854494.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1406951193.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1443410963.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1479870733.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1486168620.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1516330503.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1522628390.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1552790273.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1559088160.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1595547930.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed159693574.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1632007700.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed165991461.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1668467470.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1674765357.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1704927240.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1711225127.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1741387010.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1747684897.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1777846780.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1784144667.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1820604437.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1857064207.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1863362094.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1893523977.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1899821864.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1929983747.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1936281634.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed196153344.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1966443517.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1972741404.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2009201174.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed202451231.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2045660944.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2051958831.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2082120714.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2088418601.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2118580484.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2124878371.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed238911001.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed275370771.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed311830541.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed318128428.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed348290311.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed354588198.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed384750081.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed391047968.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed427507738.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed463967508.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed500427278.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed50314264.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed506725165.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed536887048.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed543184935.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed573346818.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed579644705.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed609806588.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed616104475.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed652564245.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed689024015.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed695321902.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed725483785.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed731781672.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed7556607.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed761943555.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed768241442.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed798403325.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed804701212.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed841160982.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed86774034.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed877620752.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed883918639.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed914080522.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed920378409.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed93071921.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed950540292.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed956838179.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed987000062.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed993297949.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1029757719.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1066217489.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1072515376.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1102677259.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1108975146.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1139137029.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1145434916.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1175596799.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1181894686.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1218354456.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed123233804.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed123456789.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1254814226.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1261112113.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1291273996.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed129531691.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1297571883.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1327733766.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1334031653.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1364193536.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1370491423.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed13854494.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1406951193.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1443410963.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1479870733.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1486168620.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1516330503.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1522628390.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1552790273.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1559088160.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1595547930.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed159693574.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1632007700.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed165991461.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1668467470.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1674765357.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1704927240.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1711225127.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1741387010.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1747684897.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1777846780.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1784144667.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1820604437.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1857064207.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1863362094.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1893523977.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1899821864.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1929983747.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1936281634.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed196153344.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1966443517.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1972741404.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2009201174.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed202451231.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2045660944.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2051958831.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2082120714.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2088418601.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2118580484.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2124878371.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed238911001.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed275370771.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed311830541.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed318128428.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed348290311.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed354588198.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed384750081.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed391047968.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed427507738.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed463967508.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed500427278.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed50314264.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed506725165.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed536887048.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed543184935.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed573346818.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed579644705.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed609806588.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed616104475.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed652564245.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed689024015.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed695321902.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed725483785.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed731781672.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed7556607.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed761943555.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed768241442.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed798403325.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed804701212.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed841160982.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed86774034.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed877620752.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed883918639.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed914080522.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed920378409.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed93071921.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed950540292.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed956838179.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed987000062.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed993297949.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1029757719.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1066217489.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1072515376.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1102677259.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1108975146.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1139137029.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1145434916.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1175596799.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1181894686.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1218354456.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123233804.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123456789.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1254814226.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1261112113.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1291273996.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed129531691.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1297571883.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1327733766.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1334031653.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1364193536.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1370491423.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed13854494.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1406951193.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1443410963.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1479870733.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1486168620.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1516330503.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1522628390.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1552790273.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1559088160.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1595547930.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed159693574.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1632007700.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed165991461.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1668467470.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1674765357.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1704927240.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1711225127.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1741387010.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1747684897.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1777846780.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1784144667.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1820604437.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1857064207.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1863362094.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1893523977.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1899821864.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1929983747.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1936281634.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed196153344.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1966443517.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1972741404.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2009201174.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed202451231.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2045660944.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2051958831.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2082120714.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2088418601.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2118580484.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2124878371.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed238911001.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed275370771.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed311830541.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed318128428.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed348290311.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed354588198.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed384750081.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed391047968.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed427507738.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed463967508.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed500427278.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed50314264.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed506725165.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed536887048.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed543184935.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed573346818.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed579644705.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed609806588.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed616104475.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed652564245.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed689024015.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed695321902.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed725483785.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed731781672.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed7556607.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed761943555.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed768241442.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed798403325.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed804701212.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed841160982.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed86774034.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed877620752.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed883918639.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed914080522.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed920378409.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed93071921.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed950540292.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed956838179.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed987000062.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed993297949.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda0.4298.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda0.6447.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.0745.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.3431.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.8803.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda0.4298.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda0.6447.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.0745.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.3431.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.8803.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda0.4298.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda0.6447.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.0745.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.3431.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.8803.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/transient_analysis/standard/cloud_server.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/transient_analysis/standard/coord_server.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/output/plot/transient_analysis/standard/edge_node.png\" beforeDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/simulation/edge_scalability_simulator.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/simulation/edge_scalability_simulator.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/simulation/simulator.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/simulation/simulator.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/utils/sim_utils.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/utils/sim_utils.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/utils/simulation_output.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/utils/simulation_output.py\" afterDir=\"false\" />\r\n      <change beforePath=\"$PROJECT_DIR$/utils/simulation_stats.py\" beforeDir=\"false\" afterPath=\"$PROJECT_DIR$/utils/simulation_stats.py\" afterDir=\"false\" />\r\n    </list>\r\n    <list id=\"ac27c543-9983-46b3-a6ff-446756d52f99\" name=\"Changes by leonardo\" comment=\"\" />\r\n    <option name=\"SHOW_DIALOG\" value=\"false\" />\r\n    <option name=\"HIGHLIGHT_CONFLICTS\" value=\"true\" />\r\n    <option name=\"HIGHLIGHT_NON_ACTIVE_CHANGELIST\" value=\"false\" />\r\n    <option name=\"LAST_RESOLUTION\" value=\"IGNORE\" />\r\n  </component>\r\n  <component name=\"FileTemplateManagerImpl\">\r\n    <option name=\"RECENT_TEMPLATES\">\r\n      <list>\r\n        <option value=\"Python Script\" />\r\n      </list>\r\n    </option>\r\n  </component>\r\n  <component name=\"Git.Settings\">\r\n    <option name=\"RECENT_GIT_ROOT_PATH\" value=\"$PROJECT_DIR$\" />\r\n  </component>\r\n  <component name=\"GitHubPullRequestSearchHistory\">{\r\n  &quot;lastFilter&quot;: {\r\n    &quot;state&quot;: &quot;OPEN&quot;,\r\n    &quot;assignee&quot;: &quot;PierfrancescoLijoi&quot;\r\n  }\r\n}</component>\r\n  <component name=\"GithubPullRequestsUISettings\">{\r\n  &quot;selectedUrlAndAccountId&quot;: {\r\n    &quot;url&quot;: &quot;https://github.com/lucacapone/PMCSN-project.git&quot;,\r\n    &quot;accountId&quot;: &quot;62403c0f-bbd7-4367-9d1f-2adf0fabaef9&quot;\r\n  }\r\n}</component>\r\n  <component name=\"JsBuildToolGruntFileManager\" detection-done=\"true\" sorting=\"DEFINITION_ORDER\" />\r\n  <component name=\"JsBuildToolPackageJson\" detection-done=\"true\" sorting=\"DEFINITION_ORDER\" />\r\n  <component name=\"JsGulpfileManager\">\r\n    <detection-done>true</detection-done>\r\n    <sorting>DEFINITION_ORDER</sorting>\r\n  </component>\r\n  <component name=\"ProjectColorInfo\">{\r\n  &quot;associatedIndex&quot;: 3\r\n}</component>\r\n  <component name=\"ProjectFrameBounds\">\r\n    <option name=\"x\" value=\"104\" />\r\n    <option name=\"y\" value=\"110\" />\r\n    <option name=\"width\" value=\"1443\" />\r\n    <option name=\"height\" value=\"898\" />\r\n  </component>\r\n  <component name=\"ProjectId\" id=\"30rd7sX9tQ2JzBR5bDtxMkKpwir\" />\r\n  <component name=\"ProjectLevelVcsManager\" settingsEditedManually=\"true\" />\r\n  <component name=\"ProjectView\">\r\n    <navigator proportions=\"\" version=\"1\">\r\n      <foldersAlwaysOnTop value=\"true\" />\r\n    </navigator>\r\n    <panes>\r\n      <pane id=\"Scope\" />\r\n      <pane id=\"ProjectPane\">\r\n        <subPane>\r\n          <expand>\r\n            <path>\r\n              <item name=\"pmcsn\" type=\"b2602c69:ProjectViewProjectNode\" />\r\n              <item name=\"pmcsn\" type=\"462c0819:PsiDirectoryNode\" />\r\n            </path>\r\n          </expand>\r\n          <select />\r\n        </subPane>\r\n      </pane>\r\n    </panes>\r\n  </component>\r\n  <component name=\"ProjectViewState\">\r\n    <option name=\"hideEmptyMiddlePackages\" value=\"true\" />\r\n    <option name=\"showLibraryContents\" value=\"true\" />\r\n  </component>\r\n  <component name=\"PropertiesComponent\">{\r\n  &quot;keyToString&quot;: {\r\n    &quot;Python.constants.executor&quot;: &quot;Run&quot;,\r\n    &quot;Python.main.executor&quot;: &quot;Run&quot;,\r\n    &quot;Python.sim_utils.executor&quot;: &quot;Run&quot;,\r\n    &quot;Python.simulation_output.executor&quot;: &quot;Run&quot;,\r\n    &quot;Python.simulation_stats.executor&quot;: &quot;Run&quot;,\r\n    &quot;Python.simulator.executor&quot;: &quot;Run&quot;,\r\n    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,\r\n    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,\r\n    &quot;SONARLINT_PRECOMMIT_ANALYSIS&quot;: &quot;true&quot;,\r\n    &quot;database.data.extractors.current.export.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,\r\n    &quot;database.data.extractors.current.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,\r\n    &quot;git-widget-placeholder&quot;: &quot;main&quot;,\r\n    &quot;last_opened_file_path&quot;: &quot;C:/Users/pf23l/OneDrive/Desktop/PMCSN-project&quot;,\r\n    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,\r\n    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,\r\n    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,\r\n    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,\r\n    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,\r\n    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;\r\n  }\r\n}</component>\r\n  <component name=\"RecentsManager\">\r\n    <key name=\"CopyFile.RECENT_KEYS\">\r\n      <recent name=\"C:\\Users\\pf23l\\OneDrive\\Desktop\\PMCSN-project\" />\r\n    </key>\r\n    <key name=\"MoveFile.RECENT_KEYS\">\r\n      <recent name=\"C:\\Users\\pf23l\\OneDrive\\Desktop\\PMCSN-project\\utils\" />\r\n    </key>\r\n  </component>\r\n  <component name=\"RunManager\">\r\n    <configuration default=\"true\" type=\"PythonConfigurationType\" factoryName=\"Python\">\r\n      <module name=\"pmcsn\" />\r\n      <option name=\"ENV_FILES\" value=\"\" />\r\n      <option name=\"INTERPRETER_OPTIONS\" value=\"\" />\r\n      <option name=\"PARENT_ENVS\" value=\"true\" />\r\n      <envs>\r\n        <env name=\"PYTHONUNBUFFERED\" value=\"1\" />\r\n      </envs>\r\n      <option name=\"SDK_HOME\" value=\"\" />\r\n      <option name=\"SDK_NAME\" value=\"Python 3.12 (pythonProject)\" />\r\n      <option name=\"WORKING_DIRECTORY\" value=\"\" />\r\n      <option name=\"IS_MODULE_SDK\" value=\"false\" />\r\n      <option name=\"ADD_CONTENT_ROOTS\" value=\"true\" />\r\n      <option name=\"ADD_SOURCE_ROOTS\" value=\"true\" />\r\n      <EXTENSION ID=\"PythonCoverageRunConfigurationExtension\" runner=\"coverage.py\" />\r\n      <option name=\"SCRIPT_NAME\" value=\"main\" />\r\n      <option name=\"PARAMETERS\" value=\"\" />\r\n      <option name=\"SHOW_COMMAND_LINE\" value=\"false\" />\r\n      <option name=\"EMULATE_TERMINAL\" value=\"false\" />\r\n      <option name=\"MODULE_MODE\" value=\"false\" />\r\n      <option name=\"REDIRECT_INPUT\" value=\"false\" />\r\n      <option name=\"INPUT_FILE\" value=\"\" />\r\n      <method v=\"2\" />\r\n    </configuration>\r\n  </component>\r\n  <component name=\"SharedIndexes\">\r\n    <attachedChunks>\r\n      <set>\r\n        <option value=\"bundled-js-predefined-d6986cc7102b-5c90d61e3bab-JavaScript-PY-242.23339.19\" />\r\n        <option value=\"bundled-python-sdk-0029f7779945-399fe30bd8c1-com.jetbrains.pycharm.pro.sharedIndexes.bundled-PY-242.23339.19\" />\r\n      </set>\r\n    </attachedChunks>\r\n  </component>\r\n  <component name=\"SpellCheckerSettings\" RuntimeDictionaries=\"0\" Folders=\"0\" CustomDictionaries=\"0\" DefaultDictionary=\"application-level\" UseSingleDictionary=\"true\" transferred=\"true\" />\r\n  <component name=\"SvnConfiguration\">\r\n    <configuration />\r\n  </component>\r\n  <component name=\"TaskManager\">\r\n    <task active=\"true\" id=\"Default\" summary=\"Default task\">\r\n      <changelist id=\"cb0572bf-3a6b-4836-9234-641477405e06\" name=\"Default Changelist\" comment=\"\" />\r\n      <created>1754298195273</created>\r\n      <option name=\"number\" value=\"Default\" />\r\n      <option name=\"presentableId\" value=\"Default\" />\r\n      <updated>1754298195273</updated>\r\n      <workItem from=\"1754389464090\" duration=\"21958000\" />\r\n      <workItem from=\"1754422266249\" duration=\"4086000\" />\r\n      <workItem from=\"1754482843073\" duration=\"14430000\" />\r\n      <workItem from=\"1754555886259\" duration=\"17239000\" />\r\n      <workItem from=\"1754919330729\" duration=\"12843000\" />\r\n    </task>\r\n    <task id=\"LOCAL-00001\" summary=\"Primo commit\">\r\n      <created>1754298834847</created>\r\n      <option name=\"number\" value=\"00001\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00001\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754298834847</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00002\" summary=\"Primo commit aggiunti main stampa e cartella per prova\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754389912137</created>\r\n      <option name=\"number\" value=\"00002\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00002\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754389912137</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00003\" summary=\"struttura di partenza, cè qualche bug, commit preventivo prima di modificare significativamente risolverlo\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754399893244</created>\r\n      <option name=\"number\" value=\"00003\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00003\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754399893244</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00004\" summary=\"risolto problema di utilizzazioneC 0.0 , bug ancora su count E anco 0.0\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754403596988</created>\r\n      <option name=\"number\" value=\"00004\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00004\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754403596988</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00005\" summary=\"rilevato bug nella suddivisone nei pacchetti, probabile bug anche nei lambda\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754407764619</created>\r\n      <option name=\"number\" value=\"00005\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00005\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754407764619</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00006\" summary=\"suddivisione dei pacchetti corretto per coordinator edge\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754413580936</created>\r\n      <option name=\"number\" value=\"00006\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00006\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754413580936</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00007\" summary=\"risolto bug sui grafici, ma rilevato altro bug , consideriamo il lambda in base all'orario corrente, in base all'rario il codice preleva il lambda dalla fascia oraria\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754414399952</created>\r\n      <option name=\"number\" value=\"00007\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00007\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754414399952</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00008\" summary=\"risolto bug sui lambda , ora sono considerati correttamente , problema ora su come fargli generare i plot, (come considerare tutti i risultati?)\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754416342821</created>\r\n      <option name=\"number\" value=\"00008\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00008\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754416342821</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00009\" summary=\"sistemati grafici per i lambda per fase transiente,  bug fixed.\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754474269926</created>\r\n      <option name=\"number\" value=\"00009\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00009\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754474269926</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00010\" summary=\"implemetnata scalability e raccolti dati su 100 repliche\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754584353041</created>\r\n      <option name=\"number\" value=\"00010\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00010\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754584353041</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00011\" summary=\"statistics updated\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754927185002</created>\r\n      <option name=\"number\" value=\"00011\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00011\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754927185002</updated>\r\n    </task>\r\n    <task id=\"LOCAL-00012\" summary=\"fix plots\">\r\n      <option name=\"closed\" value=\"true\" />\r\n      <created>1754929015147</created>\r\n      <option name=\"number\" value=\"00012\" />\r\n      <option name=\"presentableId\" value=\"LOCAL-00012\" />\r\n      <option name=\"project\" value=\"LOCAL\" />\r\n      <updated>1754929015147</updated>\r\n    </task>\r\n    <option name=\"localTasksCounter\" value=\"13\" />\r\n    <servers />\r\n  </component>\r\n  <component name=\"TodoView\">\r\n    <todo-panel id=\"selected-file\">\r\n      <is-autoscroll-to-source value=\"true\" />\r\n    </todo-panel>\r\n    <todo-panel id=\"all\">\r\n      <are-packages-shown value=\"true\" />\r\n      <is-autoscroll-to-source value=\"true\" />\r\n    </todo-panel>\r\n  </component>\r\n  <component name=\"ToolWindowManager\">\r\n    <frame x=\"104\" y=\"110\" width=\"1443\" height=\"898\" extended-state=\"0\" />\r\n    <layout>\r\n      <window_info id=\"Favorites\" side_tool=\"true\" />\r\n      <window_info content_ui=\"combo\" id=\"Project\" order=\"0\" visible=\"true\" weight=\"0.19985725\" />\r\n      <window_info id=\"Structure\" order=\"1\" side_tool=\"true\" weight=\"0.25\" />\r\n      <window_info anchor=\"bottom\" id=\"Docker\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Database Changes\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Version Control\" show_stripe_button=\"false\" />\r\n      <window_info anchor=\"bottom\" id=\"Python Console\" />\r\n      <window_info active=\"true\" anchor=\"bottom\" id=\"Terminal\" sideWeight=\"0.49964312\" visible=\"true\" />\r\n      <window_info anchor=\"bottom\" id=\"Event Log\" sideWeight=\"0.5003569\" side_tool=\"true\" />\r\n      <window_info anchor=\"bottom\" id=\"Message\" order=\"0\" />\r\n      <window_info anchor=\"bottom\" id=\"Find\" order=\"1\" />\r\n      <window_info anchor=\"bottom\" id=\"Run\" order=\"2\" />\r\n      <window_info anchor=\"bottom\" id=\"Debug\" order=\"3\" weight=\"0.4\" />\r\n      <window_info anchor=\"bottom\" id=\"Cvs\" order=\"4\" weight=\"0.25\" />\r\n      <window_info anchor=\"bottom\" id=\"Inspection\" order=\"5\" weight=\"0.4\" />\r\n      <window_info anchor=\"bottom\" id=\"TODO\" order=\"6\" />\r\n      <window_info anchor=\"right\" id=\"Database\" />\r\n      <window_info anchor=\"right\" id=\"R Packages\" />\r\n      <window_info anchor=\"right\" id=\"SciView\" />\r\n      <window_info anchor=\"right\" id=\"R Graphics\" />\r\n      <window_info anchor=\"right\" id=\"Commander\" internal_type=\"SLIDING\" order=\"0\" type=\"SLIDING\" weight=\"0.4\" />\r\n      <window_info anchor=\"right\" id=\"Ant Build\" order=\"1\" weight=\"0.25\" />\r\n      <window_info anchor=\"right\" content_ui=\"combo\" id=\"Hierarchy\" order=\"2\" weight=\"0.25\" />\r\n    </layout>\r\n  </component>\r\n  <component name=\"TypeScriptGeneratedFilesManager\">\r\n    <option name=\"version\" value=\"3\" />\r\n  </component>\r\n  <component name=\"Vcs.Log.Tabs.Properties\">\r\n    <option name=\"TAB_STATES\">\r\n      <map>\r\n        <entry key=\"MAIN\">\r\n          <value>\r\n            <State />\r\n          </value>\r\n        </entry>\r\n      </map>\r\n    </option>\r\n  </component>\r\n  <component name=\"VcsContentAnnotationSettings\">\r\n    <option name=\"myLimit\" value=\"2678400000\" />\r\n  </component>\r\n  <component name=\"VcsManagerConfiguration\">\r\n    <MESSAGE value=\"Primo commit\" />\r\n    <MESSAGE value=\"Primo commit aggiunti main stampa e cartella per prova\" />\r\n    <MESSAGE value=\"struttura di partenza, cè qualche bug, commit preventivo prima di modificare significativamente risolverlo\" />\r\n    <MESSAGE value=\"risolto problema di utilizzazioneC 0.0 , bug ancora su count E anco 0.0\" />\r\n    <MESSAGE value=\"rilevato bug nella suddivisone nei pacchetti, probabile bug anche nei lambda\" />\r\n    <MESSAGE value=\"suddivisione dei pacchetti corretto per coordinator edge\" />\r\n    <MESSAGE value=\"risolto bug sui grafici, ma rilevato altro bug , consideriamo il lambda in base all'orario corrente, in base all'rario il codice preleva il lambda dalla fascia oraria\" />\r\n    <MESSAGE value=\"risolto bug sui lambda , ora sono considerati correttamente , problema ora su come fargli generare i plot, (come considerare tutti i risultati?)\" />\r\n    <MESSAGE value=\"sistemati grafici per i lambda per fase transiente, fixed bug.\" />\r\n    <MESSAGE value=\"sistemati grafici per i lambda per fase transiente,  bug fixed.\" />\r\n    <MESSAGE value=\"implemetnata scalability e raccolti dati su 100 repliche\" />\r\n    <MESSAGE value=\"statistics updated\" />\r\n    <MESSAGE value=\"fix plots\" />\r\n    <option name=\"LAST_COMMIT_MESSAGE\" value=\"fix plots\" />\r\n  </component>\r\n  <component name=\"com.intellij.coverage.CoverageDataManagerImpl\">\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$sim_utils.coverage\" NAME=\"sim_utils Coverage Results\" MODIFIED=\"1754401305858\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$/utils\" />\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$constants.coverage\" NAME=\"constants Coverage Results\" MODIFIED=\"1754399506220\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$/utils\" />\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$simulation_stats.coverage\" NAME=\"simulation_stats Coverage Results\" MODIFIED=\"1754400174506\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$/utils\" />\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$simulation_output.coverage\" NAME=\"simulation_output Coverage Results\" MODIFIED=\"1754396884155\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$/utils\" />\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$simulator.coverage\" NAME=\"simulator Coverage Results\" MODIFIED=\"1754401115058\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$/simulation\" />\r\n    <SUITE FILE_PATH=\"coverage/PMCSN_project$main.coverage\" NAME=\"main Coverage Results\" MODIFIED=\"1754397674912\" SOURCE_PROVIDER=\"com.intellij.coverage.DefaultCoverageFileProvider\" RUNNER=\"coverage.py\" COVERAGE_BY_TEST_ENABLED=\"false\" COVERAGE_TRACING_ENABLED=\"false\" WORKING_DIRECTORY=\"$PROJECT_DIR$\" />\r\n  </component>\r\n</project>
+Subsystem: com.intellij.openapi.diff.impl.patch.CharsetEP
+<+>UTF-8
+===================================================================
+diff --git a/.idea/workspace.xml b/.idea/workspace.xml
+--- a/.idea/workspace.xml	(revision 55e8f1caa66224a481e27db5cef896c282c31b43)
++++ b/.idea/workspace.xml	(date 1755003706125)
+@@ -4,335 +4,10 @@
+     <option name="autoReloadType" value="SELECTIVE" />
+   </component>
+   <component name="ChangeListManager">
+-    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="fix plots">
++    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="clean data uploaded">
++      <change afterPath="$PROJECT_DIR$/utils/scalability_plot_maker.py" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
+       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/edge_scalability_statistics.csv" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/infinite_statistics.csv" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/lambda_scan_statistics.csv" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1029757719.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1066217489.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1072515376.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1102677259.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1108975146.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1139137029.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1145434916.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1175596799.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1181894686.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1218354456.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed123233804.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed123456789.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1254814226.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1261112113.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1291273996.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed129531691.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1297571883.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1327733766.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1334031653.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1364193536.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1370491423.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed13854494.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1406951193.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1443410963.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1479870733.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1486168620.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1516330503.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1522628390.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1552790273.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1559088160.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1595547930.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed159693574.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1632007700.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed165991461.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1668467470.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1674765357.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1704927240.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1711225127.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1741387010.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1747684897.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1777846780.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1784144667.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1820604437.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1857064207.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1863362094.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1893523977.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1899821864.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1929983747.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1936281634.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed196153344.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1966443517.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed1972741404.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2009201174.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed202451231.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2045660944.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2051958831.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2082120714.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2088418601.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2118580484.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed2124878371.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed238911001.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed275370771.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed311830541.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed318128428.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed348290311.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed354588198.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed384750081.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed391047968.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed427507738.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed463967508.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed500427278.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed50314264.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed506725165.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed536887048.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed543184935.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed573346818.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed579644705.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed609806588.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed616104475.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed652564245.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed689024015.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed695321902.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed725483785.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed731781672.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed7556607.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed761943555.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed768241442.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed798403325.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed804701212.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed841160982.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed86774034.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed877620752.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed883918639.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed914080522.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed920378409.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed93071921.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed950540292.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed956838179.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed987000062.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/cloud_server_seed993297949.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1029757719.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1066217489.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1072515376.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1102677259.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1108975146.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1139137029.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1145434916.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1175596799.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1181894686.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1218354456.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed123233804.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed123456789.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1254814226.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1261112113.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1291273996.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed129531691.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1297571883.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1327733766.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1334031653.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1364193536.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1370491423.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed13854494.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1406951193.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1443410963.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1479870733.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1486168620.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1516330503.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1522628390.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1552790273.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1559088160.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1595547930.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed159693574.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1632007700.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed165991461.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1668467470.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1674765357.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1704927240.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1711225127.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1741387010.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1747684897.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1777846780.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1784144667.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1820604437.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1857064207.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1863362094.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1893523977.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1899821864.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1929983747.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1936281634.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed196153344.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1966443517.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed1972741404.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2009201174.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed202451231.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2045660944.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2051958831.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2082120714.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2088418601.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2118580484.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed2124878371.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed238911001.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed275370771.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed311830541.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed318128428.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed348290311.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed354588198.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed384750081.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed391047968.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed427507738.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed463967508.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed500427278.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed50314264.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed506725165.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed536887048.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed543184935.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed573346818.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed579644705.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed609806588.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed616104475.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed652564245.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed689024015.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed695321902.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed725483785.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed731781672.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed7556607.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed761943555.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed768241442.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed798403325.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed804701212.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed841160982.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed86774034.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed877620752.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed883918639.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed914080522.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed920378409.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed93071921.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed950540292.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed956838179.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed987000062.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/coord_server_edge_seed993297949.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1029757719.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1066217489.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1072515376.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1102677259.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1108975146.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1139137029.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1145434916.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1175596799.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1181894686.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1218354456.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123233804.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed123456789.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1254814226.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1261112113.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1291273996.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed129531691.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1297571883.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1327733766.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1334031653.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1364193536.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1370491423.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed13854494.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1406951193.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1443410963.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1479870733.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1486168620.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1516330503.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1522628390.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1552790273.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1559088160.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1595547930.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed159693574.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1632007700.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed165991461.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1668467470.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1674765357.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1704927240.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1711225127.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1741387010.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1747684897.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1777846780.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1784144667.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1820604437.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1857064207.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1863362094.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1893523977.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1899821864.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1929983747.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1936281634.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed196153344.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1966443517.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed1972741404.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2009201174.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed202451231.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2045660944.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2051958831.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2082120714.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2088418601.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2118580484.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed2124878371.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed238911001.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed275370771.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed311830541.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed318128428.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed348290311.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed354588198.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed384750081.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed391047968.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed427507738.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed463967508.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed500427278.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed50314264.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed506725165.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed536887048.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed543184935.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed573346818.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed579644705.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed609806588.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed616104475.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed652564245.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed689024015.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed695321902.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed725483785.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed731781672.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed7556607.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed761943555.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed768241442.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed798403325.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed804701212.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed841160982.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed86774034.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed877620752.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed883918639.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed914080522.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed920378409.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed93071921.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed950540292.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed956838179.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed987000062.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_lambda/lambda_scan/edge_node_seed993297949.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda0.4298.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda0.6447.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.0745.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.3431.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/cloud_server_lambda1.8803.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda0.4298.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda0.6447.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.0745.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.3431.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/coord_server_edge_lambda1.8803.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda0.4298.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda0.6447.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.0745.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.3431.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/lambda_scan/edge_node_lambda1.8803.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/cloud_server.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/coord_server.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/edge_node.png" beforeDir="false" />
+-      <change beforePath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/edge_scalability_simulator.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/simulation/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/simulator.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/utils/sim_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/sim_utils.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/utils/simulation_output.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/simulation_output.py" afterDir="false" />
+-      <change beforePath="$PROJECT_DIR$/utils/simulation_stats.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/simulation_stats.py" afterDir="false" />
+     </list>
+     <list id="ac27c543-9983-46b3-a6ff-446756d52f99" name="Changes by leonardo" comment="" />
+     <option name="SHOW_DIALOG" value="false" />
+@@ -482,7 +157,8 @@
+       <workItem from="1754422266249" duration="4086000" />
+       <workItem from="1754482843073" duration="14430000" />
+       <workItem from="1754555886259" duration="17239000" />
+-      <workItem from="1754919330729" duration="12843000" />
++      <workItem from="1754919330729" duration="15586000" />
++      <workItem from="1754989477784" duration="6331000" />
+     </task>
+     <task id="LOCAL-00001" summary="Primo commit">
+       <created>1754298834847</created>
+@@ -579,7 +255,31 @@
+       <option name="project" value="LOCAL" />
+       <updated>1754929015147</updated>
+     </task>
+-    <option name="localTasksCounter" value="13" />
++    <task id="LOCAL-00013" summary="stastics improved + summuries added (json and txt) + plot and csv divided by Analysis Type">
++      <option name="closed" value="true" />
++      <created>1754934619321</created>
++      <option name="number" value="00013" />
++      <option name="presentableId" value="LOCAL-00013" />
++      <option name="project" value="LOCAL" />
++      <updated>1754934619321</updated>
++    </task>
++    <task id="LOCAL-00014" summary="aggiunta scalabilità coordinator server edge simulazione">
++      <option name="closed" value="true" />
++      <created>1754936689513</created>
++      <option name="number" value="00014" />
++      <option name="presentableId" value="LOCAL-00014" />
++      <option name="project" value="LOCAL" />
++      <updated>1754936689513</updated>
++    </task>
++    <task id="LOCAL-00015" summary="clean data uploaded">
++      <option name="closed" value="true" />
++      <created>1754937436643</created>
++      <option name="number" value="00015" />
++      <option name="presentableId" value="LOCAL-00015" />
++      <option name="project" value="LOCAL" />
++      <updated>1754937436643</updated>
++    </task>
++    <option name="localTasksCounter" value="16" />
+     <servers />
+   </component>
+   <component name="TodoView">
+@@ -650,7 +350,10 @@
+     <MESSAGE value="implemetnata scalability e raccolti dati su 100 repliche" />
+     <MESSAGE value="statistics updated" />
+     <MESSAGE value="fix plots" />
+-    <option name="LAST_COMMIT_MESSAGE" value="fix plots" />
++    <MESSAGE value="stastics improved + summuries added (json and txt) + plot and csv divided by Analysis Type" />
++    <MESSAGE value="aggiunta scalabilità coordinator server edge simulazione" />
++    <MESSAGE value="clean data uploaded" />
++    <option name="LAST_COMMIT_MESSAGE" value="clean data uploaded" />
+   </component>
+   <component name="com.intellij.coverage.CoverageDataManagerImpl">
+     <SUITE FILE_PATH="coverage/PMCSN_project$sim_utils.coverage" NAME="sim_utils Coverage Results" MODIFIED="1754401305858" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />

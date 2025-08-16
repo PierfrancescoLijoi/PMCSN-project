@@ -1,0 +1,13 @@
+{
+  "header": "Stats after 100 replications",
+  "sim_type": "coord_scalability",
+  "replications": 100,
+  "generated_at": "2025-08-16 18:46:57",
+  "metrics": [
+    {
+      "name": "Coordinator Edge - Average wait time",
+      "mean": 0.6301460532032828,
+      "ci_95": 0.01106675441181664
+    }
+  ]
+}

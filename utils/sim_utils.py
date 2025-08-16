@@ -74,6 +74,8 @@ def GetLambda(current_time):
             return lam
     return cs.LAMBDA_SLOTS[-1][2]  # default ultima fascia
 
+def GetServiceFeedback_improved():
+    return Exponential(cs.FEEDBACK_SERVICE)
 
 def Exponential(mean):
     """

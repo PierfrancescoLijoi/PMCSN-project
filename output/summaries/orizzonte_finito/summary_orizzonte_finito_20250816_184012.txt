@@ -1,0 +1,21 @@
+=== Stats after 100 replications ===
+Edge Node - Average wait time: 25.164119 ± 4.649052
+Cloud Server - Average wait time: 1.292208 ± 0.031264
+Coordinator Edge - Average wait time: 0.598052 ± 0.008224
+Edge Node - Average delay (queue): 24.778242 ± 4.649045
+Cloud Server - Average delay (queue): 0.492002 ± 0.031229
+Coordinator Edge - Average delay (queue): 0.157293 ± 0.008609
+Edge Node (Class E) - Average delay: 41.309031 ± 7.751602
+Edge Node (Class E) - Average response: 41.809031 ± 7.751602
+Edge Node - Avg number in node (L): 64.180271 ± 12.046892
+Edge Node - Avg number in queue (Lq): 63.603511 ± 12.029892
+Cloud Server - Avg number in node (L): 0.621503 ± 0.039494
+Cloud Server - Avg number in queue (Lq): 0.279899 ± 0.025871
+Coordinator - Avg number in node (L): 0.411018 ± 0.022164
+Coordinator - Avg number in queue (Lq): 0.130067 ± 0.011003
+Edge Node - Utilization: 0.576760 ± 0.023885
+Coordinator - Utilization: 0.280951 ± 0.011401
+Cloud - Avg busy servers: 0.341604 ± 0.014157
+Edge Node - Throughput: 1.494543 ± 0.061905
+Cloud - Throughput: 0.426948 ± 0.017696
+Coordinator - Throughput: 0.640646 ± 0.026523
