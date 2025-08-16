@@ -57,6 +57,9 @@ def edge_scalability_simulation(stop, forced_lambda=None, slot_index=None):
         if stats.number_coord > 0:
             stats.area_coord.node += delta * stats.number_coord
 
+        if stats.number_E > 0:
+            stats.area_E.node += delta * stats.number_E
+
         # Accumulo finestra di utilizzo per i server attivi (1..EDGE_SERVERS)
         for i in range(cs.EDGE_SERVERS):
             server_util_data[i + 1]["active_time"] += delta
@@ -132,6 +135,7 @@ def edge_scalability_simulation(stop, forced_lambda=None, slot_index=None):
 
                 # Routing del job COMPLETATO
                 if completed_type == "E":
+                    stats.number_E -= 1
                     # Decide C o Coordinator
                     selectStream(3)
                     rand_val = rng_random()

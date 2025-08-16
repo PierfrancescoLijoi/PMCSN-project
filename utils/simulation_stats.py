@@ -119,6 +119,9 @@ class SimulationStats:
         self.area_cloud.queue = self.area_cloud.node - self.area_cloud.service
         self.area_coord.queue = self.area_coord.node - self.area_coord.service
 
+        self.area_E.queue = self.area_E.node - self.area_E.service
+        self.area_C.queue = self.area_C.node - self.area_C.service
+
 class ReplicationStats:
     def __init__(self):
         self.seeds = []

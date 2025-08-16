@@ -94,6 +94,9 @@ def coordinator_scalability_simulation(stop, forced_lambda=None, slot_index=None
         if stats.number_coord > 0:
             stats.area_coord.node += delta * stats.number_coord
 
+        if stats.number_E > 0:
+            stats.area_E.node += delta * stats.number_E
+
         # Accumulo finestra utilizzo Coordinator
         for i in range(cs.COORD_EDGE_SERVERS):
             coord_util_data[i + 1]["active_time"] += delta
@@ -153,6 +156,7 @@ def coordinator_scalability_simulation(stop, forced_lambda=None, slot_index=None
                 stats.number_edge -= 1
 
                 if completed_type == "E":
+                    stats.number_E -= 1
                     selectStream(3)
                     rand_val = rng_random()
                     if rand_val < cs.P_C:

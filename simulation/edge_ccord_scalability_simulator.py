@@ -130,6 +130,11 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
         if stats.number_edge  > 0: stats.area_edge.node  += delta * stats.number_edge
         if stats.number_cloud > 0: stats.area_cloud.node += delta * stats.number_cloud
         if stats.number_coord > 0: stats.area_coord.node += delta * stats.number_coord
+
+        if stats.number_E > 0:
+            stats.area_E.node += delta * stats.number_E
+
+
         # capacità (server attivi * tempo)
         if cs.EDGE_SERVERS > 0:
             cap_time_edge  += delta * cs.EDGE_SERVERS
@@ -181,6 +186,10 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
             stats.count_E += 1
             # FIX: contatore numero in sistema all'Edge
             stats.number_edge += 1
+
+            stats.number_E += 1
+
+
             # prossimo arrivo
             if forced_lambda is not None:
                 lam = max(1e-12, float(forced_lambda))
@@ -204,6 +213,7 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
                 stats.number_edge -= 1
 
                 if completed_type == "E":
+                    stats.number_E -= 1
                     # routing: Cloud oppure Coordinator
                     selectStream(3)
                     r = rng_random()
@@ -269,6 +279,7 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
                     kick_assign_all()
                 break
 
+    stats.calculate_area_queue()
     # Risultati
     sim_time = max(1e-12, stats.t.current - cs.START)
 

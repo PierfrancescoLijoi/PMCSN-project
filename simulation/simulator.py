@@ -107,6 +107,10 @@ def execute(stats, stop, forced_lambda=None):
     if stats.number_coord > 0:
         stats.area_coord.node += (stats.t.next - stats.t.current) * stats.number_coord
 
+    if stats.number_E > 0:
+        stats.area_E.node += (stats.t.next - stats.t.current) * stats.number_E
+
+
     stats.t.current = stats.t.next
 
     # Registrazione per analisi transiente ogni 1000 secondi
@@ -147,6 +151,7 @@ def execute(stats, stop, forced_lambda=None):
 
             if job_type == "E":
                 selectStream(3)
+                stats.number_E -= 1
                 rand_val = rng_random()  # numero casuale per la classificazione globale
 
                 if rand_val < cs.P_C:  # 40% va al Cloud
