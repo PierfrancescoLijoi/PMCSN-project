@@ -318,7 +318,7 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
         'edge_throughput': (stats.index_edge / T),
 
         'edge_E_avg_delay': (stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0,
-        'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) + cs.EDGE_SERVICE_E,
+        'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) + cs.EDGE_SERVICE_E_im,
 
         # Cloud
         'cloud_avg_wait': cloud_W,

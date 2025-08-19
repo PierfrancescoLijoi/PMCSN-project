@@ -1,0 +1,2 @@
+=== Stats after 1 replications ===
+Edge Node - Average wait time: 0.796561 ± 0.194162

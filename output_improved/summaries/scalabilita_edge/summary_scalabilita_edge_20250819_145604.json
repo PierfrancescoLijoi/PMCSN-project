@@ -1,0 +1,13 @@
+{
+  "header_improved": "Stats after 1 replications",
+  "sim_type": "edge_scalability",
+  "replications": 1,
+  "generated_at": "2025-08-19 14:56:04",
+  "metrics": [
+    {
+      "name": "Edge Node - Average wait time",
+      "mean": 0.7965608301630015,
+      "ci_95": 0.19416205960374258
+    }
+  ]
+}

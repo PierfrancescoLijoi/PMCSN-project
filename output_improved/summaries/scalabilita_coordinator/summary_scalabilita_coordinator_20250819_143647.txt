@@ -1,0 +1,2 @@
+=== Stats after 1 replications ===
+Coordinator Edge - Average wait time: 0.604843 ± 0.013759

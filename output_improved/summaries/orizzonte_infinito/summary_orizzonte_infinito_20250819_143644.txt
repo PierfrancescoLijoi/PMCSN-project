@@ -1,0 +1,21 @@
+=== Infinite Horizon Simulation - Batch Means Summary ===
+Edge Node - Average wait time: 0.112784 ± 0.006621
+Cloud Server - Average wait time: 82.248449 ± 11.834597
+Coordinator Edge - Average wait time: 0.606390 ± 0.001219
+Edge Node - Average delay (queue): -0.387959 ± 0.006597
+Cloud Server - Average delay (queue): 81.448099 ± 11.834548
+Coordinator Edge - Average delay (queue): 0.021685 ± 0.000953
+Edge Node (Class E) - Average delay: 107.368956 ± 6.549659
+Edge Node (Class E) - Average response: 109.368956 ± 6.549659
+Edge Node - Avg number in node (L): 0.144201 ± 0.011666
+Edge Node - Avg number in queue (Lq): -0.389792 ± 0.012507
+Cloud Server - Avg number in node (L): 101.118893 ± 14.727250
+Cloud Server - Avg number in queue (Lq): 100.422717 ± 14.714963
+Coordinator - Avg number in node (L): 0.065318 ± 0.002585
+Coordinator - Avg number in queue (Lq): 0.002890 ± 0.000211
+Edge Node - Utilization: 0.266997 ± 0.010092
+Coordinator - Utilization: 0.062428 ± 0.002387
+Cloud - Avg busy servers: 0.696176 ± 0.021531
+Edge Node - Throughput: 1.066529 ± 0.040309
+Cloud - Throughput: 0.869883 ± 0.026888
+Coordinator - Throughput: 0.106747 ± 0.004078

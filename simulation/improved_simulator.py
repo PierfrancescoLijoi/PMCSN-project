@@ -421,7 +421,7 @@ def return_stats_improved(stats, t, seed):
         # tempi di coda e risposta medi per classe E (Edge)
         'edge_E_avg_delay': (stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0,
         'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) \
-                               + cs.EDGE_SERVICE_E,
+                               + cs.EDGE_SERVICE_E_im,
 
         # nuove: tempi di attesa in coda
         'edge_avg_delay': edge_Wq,
