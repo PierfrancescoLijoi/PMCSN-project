@@ -77,6 +77,10 @@ def GetLambda(current_time):
 def GetServiceFeedback_improved():
     return Exponential(cs.FEEDBACK_SERVICE)
 
+def GetServiceEdgeE_im():
+    """Servizio per job di classe E all'Edge (usa la costante improved)."""
+    return Exponential(cs.EDGE_SERVICE_E_im)
+
 def Exponential(mean):
     """
     Genera un tempo esponenziale con media 'mean'.
@@ -271,6 +275,67 @@ def append_stats(replicationStats, results, stats):
     # transiente (resta uguale)
     replicationStats.edge_wait_interval.append(stats.edge_wait_times)
     replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
+    replicationStats.coord_wait_interval.append(stats.coord_wait_times)
+
+def append_stats_improved(replicationStats, results, stats):
+    # meta
+    replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
+
+    # --- Tempi di risposta (usa Edge_NuoviArrivi come 'edge') ---
+    replicationStats.edge_wait_times.append(results['edge_NuoviArrivi_avg_wait'])
+    replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
+    replicationStats.coord_wait_times.append(results['coord_avg_wait'])
+
+    # --- Tempi di attesa/risposta per job di classe E (legacy dal tuo modello) ---
+    replicationStats.edge_E_delay_times.append(results['edge_E_avg_delay'])
+    replicationStats.edge_E_response_times.append(results['edge_E_avg_response'])
+
+    # --- Tempi di coda medi (usa Edge_NuoviArrivi come 'edge') ---
+    replicationStats.edge_delay_times.append(results['edge_NuoviArrivi_avg_delay'])
+    replicationStats.cloud_delay_times.append(results['cloud_avg_delay'])
+    replicationStats.coord_delay_times.append(results['coord_avg_delay'])
+
+    # --- L e Lq (usa Edge_NuoviArrivi come 'edge') ---
+    replicationStats.edge_L.append(results['edge_NuoviArrivi_L'])
+    replicationStats.edge_Lq.append(results['edge_NuoviArrivi_Lq'])
+    replicationStats.cloud_L.append(results['cloud_L'])
+    replicationStats.cloud_Lq.append(results['cloud_Lq'])
+    replicationStats.coord_L.append(results['coord_L'])
+    replicationStats.coord_Lq.append(results['coord_Lq'])
+
+    # --- Utilizzazioni / busy (usa Edge_NuoviArrivi come 'edge') ---
+    replicationStats.edge_utilization.append(results['edge_NuoviArrivi_utilization'])
+    replicationStats.coord_utilization.append(results['coord_utilization'])
+    replicationStats.cloud_busy.append(results['cloud_avg_busy_servers'])
+
+    # --- Throughput (usa Edge_NuoviArrivi come 'edge') ---
+    replicationStats.edge_X.append(results['edge_NuoviArrivi_throughput'])
+    replicationStats.cloud_X.append(results['cloud_throughput'])
+    replicationStats.coord_X.append(results['coord_throughput'])
+
+    # --- Serie transiente (già pronte nello stats runtime) ---
+    replicationStats.edge_wait_interval.append(stats.edge_wait_times)
+    replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
+    replicationStats.coord_wait_interval.append(stats.coord_wait_times)
+
+def append_edge_scalability_stats_improved(replicationStats, results, stats):
+    replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
+
+    # Edge scalability: considera Edge_NuoviArrivi come nodo Edge
+    replicationStats.edge_wait_times.append(results['edge_NuoviArrivi_avg_wait'])
+    replicationStats.edge_wait_interval.append(stats.edge_wait_times)
+
+def append_coord_scalability_stats_improved(replicationStats, results, stats):
+    replicationStats.seeds.append(results['seed'])
+    replicationStats.lambdas.append(results.get('lambda'))
+    replicationStats.slots.append(results.get('slot'))
+
+    # Focus sul Coordinator (immutato)
+    replicationStats.coord_wait_times.append(results['coord_avg_wait'])
     replicationStats.coord_wait_interval.append(stats.coord_wait_times)
 
 

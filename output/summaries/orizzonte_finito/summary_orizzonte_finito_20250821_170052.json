@@ -1,0 +1,108 @@
+{
+  "header": "Stats after 100 replications",
+  "sim_type": "lambda_scan",
+  "replications": 100,
+  "generated_at": "2025-08-21 17:00:52",
+  "metrics": [
+    {
+      "name": "Edge Node - Average wait time",
+      "mean": 27.661510544972547,
+      "ci_95": 5.194838369082462
+    },
+    {
+      "name": "Cloud Server - Average wait time",
+      "mean": 0.8,
+      "ci_95": 0.0
+    },
+    {
+      "name": "Coordinator Edge - Average wait time",
+      "mean": 0.6834412102161594,
+      "ci_95": 0.010557014440887228
+    },
+    {
+      "name": "Edge Node - Average delay (queue)",
+      "mean": 27.275631869958396,
+      "ci_95": 5.194814823894449
+    },
+    {
+      "name": "Cloud Server - Average delay (queue)",
+      "mean": 0.0,
+      "ci_95": 0.0
+    },
+    {
+      "name": "Coordinator Edge - Average delay (queue)",
+      "mean": 0.18590121226550135,
+      "ci_95": 0.01104923647580722
+    },
+    {
+      "name": "Edge Node (Class E) - Average delay",
+      "mean": 45.45738828055303,
+      "ci_95": 8.660628549157279
+    },
+    {
+      "name": "Edge Node (Class E) - Average response",
+      "mean": 45.95738828055303,
+      "ci_95": 8.660628549157279
+    },
+    {
+      "name": "Edge Node - Avg number in node (L)",
+      "mean": 70.55402279458305,
+      "ci_95": 13.43315303231695
+    },
+    {
+      "name": "Edge Node - Avg number in queue (Lq)",
+      "mean": 69.97751565274386,
+      "ci_95": 13.41636343325462
+    },
+    {
+      "name": "Cloud Server - Avg number in node (L)",
+      "mean": 0.6223514334094057,
+      "ci_95": 0.039677022425091045
+    },
+    {
+      "name": "Cloud Server - Avg number in queue (Lq)",
+      "mean": 0.2806495861437867,
+      "ci_95": 0.02607006555035782
+    },
+    {
+      "name": "Coordinator - Avg number in node (L)",
+      "mean": 0.47341540043690955,
+      "ci_95": 0.02636109217819454
+    },
+    {
+      "name": "Coordinator - Avg number in queue (Lq)",
+      "mean": 0.1564816593569202,
+      "ci_95": 0.013868643595858689
+    },
+    {
+      "name": "Edge Node - Utilization",
+      "mean": 0.5765071418391823,
+      "ci_95": 0.023882572374766303
+    },
+    {
+      "name": "Coordinator - Utilization",
+      "mean": 0.31693374107998934,
+      "ci_95": 0.012839598783682038
+    },
+    {
+      "name": "Cloud - Avg busy servers",
+      "mean": 0.341701847265619,
+      "ci_95": 0.014156202546401866
+    },
+    {
+      "name": "Edge Node - Throughput",
+      "mean": 1.4938669650271046,
+      "ci_95": 0.06188002893957703
+    },
+    {
+      "name": "Cloud - Throughput",
+      "mean": 0.4266410929714689,
+      "ci_95": 0.01767775419446296
+    },
+    {
+      "name": "Coordinator - Throughput",
+      "mean": 0.6405847790841669,
+      "ci_95": 0.026533029894910538
+    }
+  ]
+}

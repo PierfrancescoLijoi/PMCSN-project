@@ -196,6 +196,7 @@ def edge_scalability_simulation_improved(stop, forced_lambda=None, slot_index=No
             if stats.number_feedback == 1:
                 service = _service_feedback()
                 stats.t.completion_feedback = stats.t.current + service
+                stats.area_feedback.service += service
 
         # Eventi: Completamento Coordinator
         if stats.t.current == stats.t.completion_coord:
@@ -221,9 +222,11 @@ def edge_scalability_simulation_improved(stop, forced_lambda=None, slot_index=No
             if stats.queue_feedback:
                 stats.queue_feedback.pop(0)
             stats.number_feedback -= 1
+            stats.index_feedback = getattr(stats, 'index_feedback', 0) + 1
             if stats.number_feedback > 0:
                 service = _service_feedback()
                 stats.t.completion_feedback = stats.t.current + service
+                stats.area_feedback.service += service
             else:
                 stats.t.completion_feedback = cs.INFINITY
 
@@ -250,21 +253,35 @@ def edge_scalability_simulation_improved(stop, forced_lambda=None, slot_index=No
         'lambda': forced_lambda,
         'slot': slot_index,
 
-        # Edge
-        'edge_avg_wait': edge_W,
-        'edge_avg_delay': edge_Wq,
-        'edge_L': stats.area_edge.node / T,
-        'edge_Lq': stats.area_edge.queue / T,
-        'edge_server_service': (stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
-        'edge_server_utilization': stats.area_edge.service / T,
-        'edge_weight_utilization': (stats.area_edge.node / (max(1, cs.EDGE_SERVERS) * T)),
-        'edge_server_number': max(1, cs.EDGE_SERVERS),
+        # --- Edge_NuoviArrivi (ex-Edge) ---
+        'edge_server_number': cs.EDGE_SERVERS,
+        'edge_NuoviArrivi_avg_wait': edge_W,
+        'edge_NuoviArrivi_avg_delay': edge_Wq,
+        'edge_NuoviArrivi_L': stats.area_edge.node / T,
+        'edge_NuoviArrivi_Lq': stats.area_edge.queue / T,
+        'edge_NuoviArrivi_service_time_mean': (
+                    stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
+        'edge_NuoviArrivi_utilization': (stats.area_edge.service / (T * max(1, cs.EDGE_SERVERS))),
+        'edge_NuoviArrivi_throughput': (stats.index_edge / T),
+        'Edge_NuoviArrivi_E_Ts': (stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
 
-        'edge_E_avg_delay': (stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0,
-        'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) \
-                               + cs.EDGE_SERVICE_E_im,
+        # --- Edge_Feedback ---
+        'edge_Feedback_avg_wait': (stats.area_feedback.node / max(1, getattr(stats, 'index_feedback', 0))) if getattr(
+            stats, 'index_feedback', 0) > 0 else 0.0,
+        'edge_Feedback_avg_delay': (stats.area_feedback.queue / max(1, getattr(stats, 'index_feedback', 0))) if getattr(
+            stats, 'index_feedback', 0) > 0 else 0.0,
+        'edge_Feedback_L': stats.area_feedback.node / T,
+        'edge_Feedback_Lq': stats.area_feedback.queue / T,
+        'edge_Feedback_service_time_mean': (
+                    stats.area_feedback.service / max(1, getattr(stats, 'index_feedback', 0))) if getattr(stats,
+                                                                                                          'index_feedback',
+                                                                                                          0) > 0 else 0.0,
+        'edge_Feedback_utilization': (stats.area_feedback.service / T),
+        'edge_Feedback_throughput': (getattr(stats, 'index_feedback', 0) / T) if T > 0 else 0.0,
+        'Edge_Feedback_E_Ts': (stats.area_feedback.service / max(1, getattr(stats, 'index_feedback', 0))) if getattr(
+            stats, 'index_feedback', 0) > 0 else 0.0,
 
-        # Cloud
+        # --- Cloud ---
         'cloud_avg_wait': cloud_W,
         'cloud_avg_delay': cloud_Wq,
         'cloud_L': stats.area_cloud.node / T,
@@ -273,17 +290,18 @@ def edge_scalability_simulation_improved(stop, forced_lambda=None, slot_index=No
         'cloud_avg_busy_servers': stats.area_cloud.service / T,
         'cloud_throughput': (stats.index_cloud / T),
 
-        # Coordinator
+        # --- Coordinator ---
+        'coord_server_number': cs.COORD_EDGE_SERVERS,
         'coord_avg_wait': coord_W,
         'coord_avg_delay': coord_Wq,
         'coord_L': stats.area_coord.node / T,
         'coord_Lq': stats.area_coord.queue / T,
         'coord_service_time_mean': (stats.area_coord.service / stats.index_coord) if stats.index_coord > 0 else 0.0,
         'coord_utilization': stats.area_coord.service / T,
-        'coord_throughput': stats.index_coord / T,
+        'coord_throughput': (stats.index_coord / T),
 
-        # extra
-        'server_utilization_by_count': per_server_utilization,
-        'scalability_trace': scalability_trace
+        # Tracce scaling (debug/plot)
+        'edge_scal_trace': edge_scal_trace,
+        'coord_scal_trace': coord_scal_trace,
     }
-    return results, stats
+    return results

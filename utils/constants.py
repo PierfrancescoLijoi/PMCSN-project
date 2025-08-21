@@ -15,11 +15,13 @@ SEED = 123456789
 REPLICATIONS = 100
 
 
-EDGE_SERVERS = 2  # dual-core fisso per il modello base
+
+
+
 FEEDBACK_SERVICE = 0.1  # 0.1 classe C
 # -------------------------
-EDGE_SERVICE_E_im = 1.0  # 0.5 * 2
-
+EDGE_SERVICE_E_im = 0.42  # 0.5 * 2
+EDGE_M = 1  # M/M/1 per il nodo Edge
 
 # -------------------------
 # Orizzonte temporale
@@ -47,13 +49,18 @@ TRANSIENT_ANALYSIS = 1
 # Riferimento: Tabella di routing e testo "Equazioni di traffico"
 P_C = 0.4
 P_COORD = 1 - P_C  # 60% → Coordinator
-
-# Probabilità condizionate (dentro al 60% Coordinator)
-P1_PROB = 0.20 / P_COORD
-P2_PROB = 0.25 / P_COORD
-P3_PROB = 0.10 / P_COORD
-P4_PROB = 0.05 / P_COORD
-
+w1, w2, w3, w4 = 0.20, 0.25, 0.10, 0.05
+W = w1 + w2 + w3 + w4 # = 0.60
+P1 = w1 / W
+P2 = w2 / W
+P3 = w3 / W
+P4 = w4 / W
+assert abs(P1+P2+P3+P4 - 1) < 1e-12
+# Se ti servono le probabilità *incondizionate* complessive:
+P1_PROB = P_COORD * P1
+P2_PROB = P_COORD * P2
+P3_PROB = P_COORD * P3
+P4_PROB = P_COORD * P4
 # -------------------------
 # Configurazione dei server
 # -------------------------
@@ -101,8 +108,8 @@ CLOUD_SERVICE = 0.8
 # - P1/P2: servizio rapido e regolare → distribuzione esponenziale
 # - P3/P4: servizio variabile e più lungo → distribuzione lognormale
 # Riferimento: Sezione "Coordinator Server Edge"
-COORD_SERVICE_P1P2 = 0.4#con questi valori scala   #0.25 NON SCALA # media esponenziale
-COORD_SERVICE_P3P4 = 0.6# con questi valori scala  #0.40  NON SCALA # media lognormale
+COORD_SERVICE_P1P2 = 0.4#con questi valori scala    # media esponenziale
+COORD_SERVICE_P3P4 = 0.6# con questi valori scala   # media lognormale
 
 
 # -------------------------

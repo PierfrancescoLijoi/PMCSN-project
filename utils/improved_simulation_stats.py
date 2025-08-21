@@ -64,6 +64,7 @@ class SimulationStats_improved:
         self.number_feedback = 0
         self.area_feedback = Track()
         self.queue_feedback = []
+        self.index_feedback = 0
 
     def reset(self, start_time):
         self.t.current = start_time
@@ -71,11 +72,17 @@ class SimulationStats_improved:
         self.t.completion_edge = float("inf")
         self.t.completion_cloud = float("inf")
         self.t.completion_coord = float("inf")
+        self.t.completion_feedback = float("inf")
         self.queue_edge.clear()
         self.queue_coord_high.clear()
         self.queue_coord_low.clear()
         self.count_E = 0  # Reset del contatore E
         self.count_C = 0  # Reset del contatore C
+        # feedback
+        self.index_feedback = 0
+        self.number_feedback = 0
+        self.area_feedback = Track()
+        self.queue_feedback = []
 
     def reset_infinite(self):
         """
@@ -106,7 +113,12 @@ class SimulationStats_improved:
         self.area_coord = Track()
         self.area_E = Track()
         self.area_C = Track()
-
+        # feedback (batch corrente)
+        self.index_feedback = 0
+        self.number_feedback = 0
+        self.area_feedback = Track()
+        self.queue_feedback = []
+        self.t.completion_feedback = cs.INFINITY
         # code: svuotiamo per garantire indipendenza tra batch
         self.queue_edge = []
         self.queue_coord_low = []
@@ -129,6 +141,7 @@ class SimulationStats_improved:
 
         self.area_E.queue = self.area_E.node - self.area_E.service
         self.area_C.queue = self.area_C.node - self.area_C.service
+        self.area_feedback.queue = self.area_feedback.node - self.area_feedback.service
 
 class ReplicationStats_improved:
     def __init__(self):

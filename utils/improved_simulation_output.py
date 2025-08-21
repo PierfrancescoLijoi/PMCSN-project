@@ -22,32 +22,38 @@ import json
 file_path_improved = "output_improved/"
 
 # Intestazione CSV per i risultati della simulazione
+# utils/improved_simulation_output.py
+
 header_improved = [
-    "seed", "slot", "lambda",
+    "seed","slot","lambda",
 
-    # tempi
-    "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
-    "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
-    "edge_E_avg_delay", "edge_E_avg_response",
+    # Edge_NuoviArrivi (ex-Edge)
+    "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
+    "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_utilization","edge_NuoviArrivi_throughput",
+    "edge_NuoviArrivi_service_time_mean","Edge_NuoviArrivi_E_Ts",
 
-    # L, Lq
-    "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
+    # Edge_Feedback (post-Cloud)
+    "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
+    "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_utilization","edge_Feedback_throughput",
+    "edge_Feedback_service_time_mean","Edge_Feedback_E_Ts",
 
-    # utilizzazioni per centro
-    "edge_utilization","coord_utilization","cloud_avg_busy_servers",
+    # Cloud
+    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq",
+    "cloud_avg_busy_servers","cloud_throughput","cloud_service_time_mean",
 
-    # throughput
-    "edge_throughput","cloud_throughput","coord_throughput",
+    # Coordinator
+    "coord_avg_wait","coord_avg_delay","coord_L","coord_Lq",
+    "coord_utilization","coord_throughput","coord_service_time_mean",
 
-    # tempi di servizio realizzati
-    "edge_service_time_mean","cloud_service_time_mean","coord_service_time_mean",
+    # (opzionale) classe E per report
+    "edge_E_avg_delay","edge_E_avg_response",
 
-    # contatori esistenti
-    "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C",
-
-    # legacy per compatibilità
-    "E_utilization","C_utilization"
+    # contatori
+    "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C"
 ]
+
 
 header_infinite_improved =[
     "seed", "slot", "lambda", "batch"
@@ -140,38 +146,67 @@ header_coord_scalability_improved = [
 # === Header dedicato per la simulazione ad orizzonte infinito ===
 infinite_header_improved = [
     "seed", "slot", "lambda", "batch",
-    # tempi medi per nodo
-    "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
-    "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
-    "edge_E_avg_delay", "edge_E_avg_response",
-    # L, Lq
-    "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
-    # utilizzazioni / busy servers
-    "edge_utilization","E_utilization","C_utilization","cloud_avg_busy_servers",
-    # throughput
-    "edge_throughput","cloud_throughput","coord_throughput",
-    # tempi di servizio
-    "edge_service_time_mean","cloud_service_time_mean","coord_service_time_mean",
-    # conteggi per classi
+
+    # Edge_NuoviArrivi (ex-Edge)
+    "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
+    "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_utilization","edge_NuoviArrivi_throughput",
+    "edge_NuoviArrivi_service_time_mean","Edge_NuoviArrivi_E_Ts",
+
+    # Edge_Feedback
+    "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
+    "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_utilization","edge_Feedback_throughput",
+    "edge_Feedback_service_time_mean","Edge_Feedback_E_Ts",
+
+    # Cloud
+    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq",
+    "cloud_avg_busy_servers","cloud_throughput","cloud_service_time_mean",
+
+    # Coordinator
+    "coord_avg_wait","coord_avg_delay","coord_L","coord_Lq",
+    "coord_utilization","coord_throughput","coord_service_time_mean",
+
+    # (opzionale) classe E per report
+    "edge_E_avg_delay","edge_E_avg_response",
+
+    # contatori
     "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C"
 ]
+
 HEADER_MERGED_SCALABILITY_improved = [
     "seed","lambda","slot",
-    # Edge
-    "edge_server_number","edge_avg_wait","edge_avg_delay",
-    "edge_L","edge_Lq","edge_service_time_mean","edge_avg_busy_servers","edge_throughput",
-    "edge_E_avg_delay", "edge_E_avg_response",
+
+    # Edge_NuoviArrivi
+    "edge_server_number",
+    "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
+    "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_service_time_mean",
+    "edge_NuoviArrivi_utilization",
+    "edge_NuoviArrivi_throughput",
+
+    # Edge_Feedback
+    "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
+    "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_service_time_mean",
+    "edge_Feedback_utilization",
+    "edge_Feedback_throughput",
+
     # Cloud
-    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq","cloud_service_time_mean",
-    "cloud_avg_busy_servers","cloud_throughput",
+    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq",
+    "cloud_service_time_mean","cloud_avg_busy_servers","cloud_throughput",
+
     # Coordinator
     "coord_server_number","coord_avg_wait","coord_avg_delay","coord_L","coord_Lq",
     "coord_service_time_mean","coord_utilization","coord_throughput",
-    # Meta probabilità
+
+    # Meta probabilità (se le usi ancora)
     "pc","p1","p2","p3","p4",
+
     # Tracce serializzate
     "edge_scal_trace","coord_scal_trace"
 ]
+
 
 def clear_merged_scalability_file_improved(file_name: str):
     os.makedirs(file_path_improved, exist_ok=True)
@@ -643,7 +678,7 @@ def plot_infinite_analysis_improved():
 
     # ---------- 1) Nodi: x = batch, linee per ciascun λ reale ----------
     agg_lam_batch = df.groupby(["lambda", "batch"], as_index=False).agg({
-        "edge_avg_wait": "mean",
+        "edge_NuoviArrivi_avg_wait": "mean",
         "cloud_avg_wait": "mean",
         "coord_avg_wait": "mean",
     })
@@ -665,9 +700,7 @@ def plot_infinite_analysis_improved():
         plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
         plt.close()
 
-    plot_node_by_lambda("edge_avg_wait",
-                        "Nodo Edge: tempo di risposta per batch (linee per λ)",
-                        "infinite_edge_response_vs_batch_per_lambda.png")
+
     plot_node_by_lambda("cloud_avg_wait",
                         "Nodo Cloud: tempo di risposta per batch (linee per λ)",
                         "infinite_cloud_response_vs_batch_per_lambda.png")
@@ -677,11 +710,11 @@ def plot_infinite_analysis_improved():
 
     # ---------- 2) Curva Edge response time vs λ con punti per slot + QoS ----------
     agg_lambda_global = df.groupby("lambda", as_index=False).agg({
-        "edge_avg_wait": "mean"
+        "edge_NuoviArrivi_avg_wait": "mean"
     }).sort_values("lambda")
 
     agg_lambda_slot = df.groupby(["slot", "lambda"], as_index=False).agg({
-        "edge_avg_wait": "mean"
+        "edge_NuoviArrivi_avg_wait": "mean"
     }).sort_values(["lambda", "slot"])
 
     qos_seconds = 3.0  # QoS richiesto = 3s
@@ -689,23 +722,21 @@ def plot_infinite_analysis_improved():
     plt.figure()
     # Curva media globale (λ -> W_edge)
     if not agg_lambda_global.empty:
-        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_avg_wait"],
-                 marker="o", color="blue")
+        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_NuoviArrivi_avg_wait"], marker="o", color="blue")
     # Punti per slot
     for slot, g in agg_lambda_slot.groupby("slot"):
         if not g.empty:
-            plt.scatter(g["lambda"], g["edge_avg_wait"], label=f"Slot {slot}")
+            plt.scatter(g["lambda"], g["edge_NuoviArrivi_avg_wait"], label=f"Slot {slot}")
             for _, r in g.iterrows():
-                plt.annotate(f"{r['lambda']:.5f}",
-                             (r["lambda"], r["edge_avg_wait"]),
+                plt.annotate(f"{r['lambda']:.5f}", (r["lambda"], r["edge_NuoviArrivi_avg_wait"]),
                              textcoords="offset points", xytext=(0, 6),
                              ha="center", fontsize=8)
     # Linea QoS
     plt.axhline(y=qos_seconds, linestyle="--", color="r", linewidth=1.2,
                 label=f"QoS = {qos_seconds:.0f}s")
     plt.xlabel("λ (arrivi/secondo)")
-    plt.ylabel("Tempo medio di risposta Edge (s)")
-    plt.title("Tempo di risposta Edge rispetto a λ (con QoS = 3s)")
+    plt.ylabel("Tempo medio di risposta Edge_NuoviArrivi (s)")
+    plt.title("Tempo di risposta Edge_NuoviArrivi vs λ (con QoS = 3s)")
     plt.legend()
     plt.grid(True)
     plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",

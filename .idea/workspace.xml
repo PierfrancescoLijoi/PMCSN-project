@@ -4,15 +4,15 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="added statistic about class E">
-      <change afterPath="$PROJECT_DIR$/simulation/improved_coordinator_scalability_simulator.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/simulation/improved_edge_ccord_scalability_simulator.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/simulation/improved_edge_scalability_simulator.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/simulation/improved_simulator.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils/improved_simulation_output.py" afterDir="false" />
-      <change afterPath="$PROJECT_DIR$/utils/improved_simulation_stats.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_06_08_2025_14_24_[Default_Changelist]/shelved.patch" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_06_08_2025_14_24__Default_Changelist_.xml" beforeDir="false" />
+    <list default="true" id="cb0572bf-3a6b-4836-9234-641477405e06" name="Default Changelist" comment="fix bug found">
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_11_08_2025_16_56_[Default_Changelist]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_11_08_2025_16_56__Default_Changelist_.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_11_08_2025_17_30_[Default_Changelist]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_11_08_2025_17_30__Default_Changelist_.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_12_08_2025_15_01_[Default_Changelist]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_12_08_2025_15_01__Default_Changelist_.xml" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_13_08_2025_16_43_[Default_Changelist]/shelved.patch" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/.idea/shelf/Uncommitted_changes_before_Update_at_13_08_2025_16_43__Default_Changelist_.xml" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/main.py" beforeDir="false" afterPath="$PROJECT_DIR$/main.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/output/coord_scalability_statistics.csv" beforeDir="false" />
@@ -340,18 +340,384 @@
       <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/orizzonte_finito/edge_node_lambda1.0745.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/orizzonte_finito/edge_node_lambda1.3431.png" beforeDir="false" />
       <change beforePath="$PROJECT_DIR$/output/plot/multi_seed/orizzonte_finito/edge_node_lambda1.8803.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/cloud_server.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/coord_server.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/plot/transient_analysis/standard/edge_node.png" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_finito/summary_orizzonte_finito_20250811_202712.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_finito/summary_orizzonte_finito_20250811_202712.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250811_202857.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250811_202857.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250811_203339.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250811_203339.txt" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_edge/summary_scalabilita_edge_20250811_203112.json" beforeDir="false" />
-      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_edge/summary_scalabilita_edge_20250811_203112.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_finito/summary_orizzonte_finito_20250816_184012.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_finito/summary_orizzonte_finito_20250816_184012.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250816_184201.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250816_184201.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250816_184657.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250816_184657.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_edge/summary_scalabilita_edge_20250816_184431.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output/summaries/scalabilita_edge/summary_scalabilita_edge_20250816_184431.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/coord_scalability_statistics.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/edge_scalability_statistics.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/finite_statistics.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/infinite_statistics.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability/servers_over_time_pc_0_1.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability/servers_over_time_pc_0_4.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability/servers_over_time_pc_0_5.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability/servers_over_time_pc_0_7.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability/servers_over_time_pc_0_9.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/merged_scalability_statistics.csv" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1029757719.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1066217489.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1072515376.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1102677259.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1108975146.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1139137029.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1145434916.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1175596799.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1181894686.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1218354456.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed123233804.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed123456789.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1254814226.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1261112113.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1291273996.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed129531691.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1297571883.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1327733766.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1334031653.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1364193536.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1370491423.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed13854494.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1406951193.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1443410963.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1479870733.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1486168620.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1516330503.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1522628390.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1552790273.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1559088160.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1595547930.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed159693574.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1632007700.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed165991461.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1668467470.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1674765357.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1704927240.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1711225127.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1741387010.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1747684897.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1777846780.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1784144667.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1820604437.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1857064207.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1863362094.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1893523977.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1899821864.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1929983747.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1936281634.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed196153344.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1966443517.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed1972741404.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2009201174.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed202451231.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2045660944.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2051958831.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2082120714.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2088418601.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2118580484.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed2124878371.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed238911001.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed275370771.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed281668658.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed311830541.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed318128428.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed348290311.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed354588198.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed384750081.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed391047968.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed427507738.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed463967508.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed500427278.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed50314264.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed506725165.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed536887048.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed543184935.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed573346818.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed579644705.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed609806588.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed616104475.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed652564245.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed689024015.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed695321902.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed725483785.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed731781672.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed7556607.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed761943555.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed768241442.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed798403325.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed804701212.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed841160982.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed86774034.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed877620752.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed883918639.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed914080522.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed920378409.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed93071921.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed950540292.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed956838179.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed987000062.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/cloud_server_seed993297949.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1029757719.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1066217489.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1072515376.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1102677259.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1108975146.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1139137029.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1145434916.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1175596799.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1181894686.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1218354456.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed123233804.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed123456789.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1254814226.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1261112113.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1291273996.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed129531691.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1297571883.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1327733766.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1334031653.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1364193536.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1370491423.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed13854494.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1406951193.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1443410963.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1479870733.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1486168620.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1516330503.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1522628390.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1552790273.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1559088160.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1595547930.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed159693574.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1632007700.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed165991461.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1668467470.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1674765357.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1704927240.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1711225127.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1741387010.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1747684897.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1777846780.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1784144667.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1820604437.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1857064207.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1863362094.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1893523977.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1899821864.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1929983747.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1936281634.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed196153344.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1966443517.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed1972741404.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2009201174.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed202451231.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2045660944.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2051958831.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2082120714.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2088418601.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2118580484.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed2124878371.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed238911001.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed275370771.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed281668658.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed311830541.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed318128428.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed348290311.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed354588198.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed384750081.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed391047968.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed427507738.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed463967508.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed500427278.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed50314264.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed506725165.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed536887048.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed543184935.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed573346818.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed579644705.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed609806588.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed616104475.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed652564245.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed689024015.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed695321902.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed725483785.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed731781672.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed7556607.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed761943555.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed768241442.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed798403325.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed804701212.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed841160982.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed86774034.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed877620752.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed883918639.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed914080522.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed920378409.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed93071921.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed950540292.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed956838179.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed987000062.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/coord_server_edge_seed993297949.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1029757719.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1066217489.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1072515376.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1102677259.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1108975146.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1139137029.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1145434916.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1175596799.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1181894686.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1218354456.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed123233804.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed123456789.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1254814226.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1261112113.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1291273996.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed129531691.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1297571883.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1327733766.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1334031653.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1364193536.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1370491423.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed13854494.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1406951193.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1443410963.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1479870733.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1486168620.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1516330503.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1522628390.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1552790273.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1559088160.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1595547930.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed159693574.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1632007700.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed165991461.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1668467470.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1674765357.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1704927240.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1711225127.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1741387010.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1747684897.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1777846780.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1784144667.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1820604437.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1857064207.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1863362094.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1893523977.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1899821864.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1929983747.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1936281634.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed196153344.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1966443517.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed1972741404.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2009201174.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed202451231.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2045660944.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2051958831.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2082120714.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2088418601.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2118580484.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed2124878371.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed238911001.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed275370771.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed281668658.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed311830541.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed318128428.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed348290311.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed354588198.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed384750081.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed391047968.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed427507738.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed463967508.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed500427278.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed50314264.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed506725165.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed536887048.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed543184935.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed573346818.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed579644705.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed609806588.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed616104475.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed652564245.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed689024015.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed695321902.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed725483785.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed731781672.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed7556607.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed761943555.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed768241442.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed798403325.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed804701212.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed841160982.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed86774034.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed877620752.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed883918639.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed914080522.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed920378409.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed93071921.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed950540292.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed956838179.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed987000062.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_lambda/orizzonte_finito/edge_node_seed993297949.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/cloud_server_lambda0.4298.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/cloud_server_lambda0.6447.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/cloud_server_lambda1.0745.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/cloud_server_lambda1.3431.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/cloud_server_lambda1.8803.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/coord_server_edge_lambda0.4298.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/coord_server_edge_lambda0.6447.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/coord_server_edge_lambda1.0745.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/coord_server_edge_lambda1.3431.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/coord_server_edge_lambda1.8803.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/edge_node_lambda0.4298.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/edge_node_lambda0.6447.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/edge_node_lambda1.0745.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/edge_node_lambda1.3431.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/plot/multi_seed/orizzonte_finito/edge_node_lambda1.8803.png" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250816_190347.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250816_190347.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_143538.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_143538.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_145506.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_145506.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_150250.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_150250.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_155528.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_finito/summary_orizzonte_finito_20250819_155528.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250816_190554.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250816_190554.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_143644.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_143644.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_145603.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_145603.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_155728.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250819_155728.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250816_191117.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250816_191117.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_143647.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_143647.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_145606.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_145606.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_160214.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_coordinator/summary_scalabilita_coordinator_20250819_160214.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250816_190830.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250816_190830.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_143645.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_143645.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_145604.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_145604.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_155944.json" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/output_improved/summaries/scalabilita_edge/summary_scalabilita_edge_20250819_155944.txt" beforeDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/edge_ccord_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/edge_cord_merged_scalability_simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/improved_edge_ccord_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/improved_edge_cord_merged_scalability_simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/improved_edge_scalability_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/improved_edge_scalability_simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/improved_simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/improved_simulator.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/simulation/simulator.py" beforeDir="false" afterPath="$PROJECT_DIR$/simulation/simulator.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/constants.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/constants.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/improved_simulation_output.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/improved_simulation_output.py" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/utils/improved_simulation_stats.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/improved_simulation_stats.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/utils/sim_utils.py" beforeDir="false" afterPath="$PROJECT_DIR$/utils/sim_utils.py" afterDir="false" />
     </list>
     <list id="ac27c543-9983-46b3-a6ff-446756d52f99" name="Changes by leonardo" comment="" />
@@ -422,29 +788,29 @@
     <option name="hideEmptyMiddlePackages" value="true" />
     <option name="showLibraryContents" value="true" />
   </component>
-  <component name="PropertiesComponent"><![CDATA[{
-  "keyToString": {
-    "Python.constants.executor": "Run",
-    "Python.main.executor": "Run",
-    "Python.sim_utils.executor": "Run",
-    "Python.simulation_output.executor": "Run",
-    "Python.simulation_stats.executor": "Run",
-    "Python.simulator.executor": "Run",
-    "RunOnceActivity.ShowReadmeOnStart": "true",
-    "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "SONARLINT_PRECOMMIT_ANALYSIS": "true",
-    "database.data.extractors.current.export.id": "CSV-Groovy.csv.groovy",
-    "database.data.extractors.current.id": "CSV-Groovy.csv.groovy",
-    "git-widget-placeholder": "main",
-    "last_opened_file_path": "C:/Users/pf23l/OneDrive/Desktop/PMCSN-project/utils",
-    "node.js.detected.package.eslint": "true",
-    "node.js.detected.package.tslint": "true",
-    "node.js.selected.package.eslint": "(autodetect)",
-    "node.js.selected.package.tslint": "(autodetect)",
-    "nodejs_package_manager_path": "npm",
-    "vue.rearranger.settings.migration": "true"
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;Python.constants.executor&quot;: &quot;Run&quot;,
+    &quot;Python.main.executor&quot;: &quot;Run&quot;,
+    &quot;Python.sim_utils.executor&quot;: &quot;Run&quot;,
+    &quot;Python.simulation_output.executor&quot;: &quot;Run&quot;,
+    &quot;Python.simulation_stats.executor&quot;: &quot;Run&quot;,
+    &quot;Python.simulator.executor&quot;: &quot;Run&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;SHARE_PROJECT_CONFIGURATION_FILES&quot;: &quot;true&quot;,
+    &quot;SONARLINT_PRECOMMIT_ANALYSIS&quot;: &quot;true&quot;,
+    &quot;database.data.extractors.current.export.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,
+    &quot;database.data.extractors.current.id&quot;: &quot;CSV-Groovy.csv.groovy&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;main&quot;,
+    &quot;last_opened_file_path&quot;: &quot;C:/Users/pf23l/OneDrive/Desktop/PMCSN-project/utils&quot;,
+    &quot;node.js.detected.package.eslint&quot;: &quot;true&quot;,
+    &quot;node.js.detected.package.tslint&quot;: &quot;true&quot;,
+    &quot;node.js.selected.package.eslint&quot;: &quot;(autodetect)&quot;,
+    &quot;node.js.selected.package.tslint&quot;: &quot;(autodetect)&quot;,
+    &quot;nodejs_package_manager_path&quot;: &quot;npm&quot;,
+    &quot;vue.rearranger.settings.migration&quot;: &quot;true&quot;
   }
-}]]></component>
+}</component>
   <component name="RecentsManager">
     <key name="CopyFile.RECENT_KEYS">
       <recent name="C:\Users\pf23l\OneDrive\Desktop\PMCSN-project\utils" />
@@ -510,7 +876,13 @@
       <workItem from="1755163955623" duration="3270000" />
       <workItem from="1755275296565" duration="5148000" />
       <workItem from="1755332562515" duration="13898000" />
-      <workItem from="1755360324007" duration="2191000" />
+      <workItem from="1755360324007" duration="5719000" />
+      <workItem from="1755547272962" duration="8346000" />
+      <workItem from="1755693403596" duration="3014000" />
+      <workItem from="1755697739818" duration="197000" />
+      <workItem from="1755697949623" duration="11423000" />
+      <workItem from="1755768419795" duration="14384000" />
+      <workItem from="1755788778152" duration="11479000" />
     </task>
     <task id="LOCAL-00001" summary="Primo commit">
       <created>1754298834847</created>
@@ -655,7 +1027,23 @@
       <option name="project" value="LOCAL" />
       <updated>1755340978999</updated>
     </task>
-    <option name="localTasksCounter" value="19" />
+    <task id="LOCAL-00019" summary="Added model improved + all simulations + all statistics + all plots and summaries (txt and json)">
+      <option name="closed" value="true" />
+      <created>1755365425101</created>
+      <option name="number" value="00019" />
+      <option name="presentableId" value="LOCAL-00019" />
+      <option name="project" value="LOCAL" />
+      <updated>1755365425101</updated>
+    </task>
+    <task id="LOCAL-00020" summary="fix bug improved model and add stats">
+      <option name="closed" value="true" />
+      <created>1755618786053</created>
+      <option name="number" value="00020" />
+      <option name="presentableId" value="LOCAL-00020" />
+      <option name="project" value="LOCAL" />
+      <updated>1755618786053</updated>
+    </task>
+    <option name="localTasksCounter" value="21" />
     <servers />
   </component>
   <component name="TodoView">
@@ -731,7 +1119,9 @@
     <MESSAGE value="clean data uploaded" />
     <MESSAGE value="fix bug in edge+coord scalability merged.&#10;changed avarange service time for coord, it is more realistic now. &#10;expo-&gt; from 0.25 to 0.4&#10;Lognormale-&gt;from 0.4 to 0.6" />
     <MESSAGE value="added statistic about class E" />
-    <option name="LAST_COMMIT_MESSAGE" value="added statistic about class E" />
+    <MESSAGE value="Added model improved + all simulations + all statistics + all plots and summaries (txt and json)" />
+    <MESSAGE value="fix bug improved model and add stats" />
+    <option name="LAST_COMMIT_MESSAGE" value="fix bug improved model and add stats" />
   </component>
   <component name="com.intellij.coverage.CoverageDataManagerImpl">
     <SUITE FILE_PATH="coverage/PMCSN_project$sim_utils.coverage" NAME="sim_utils Coverage Results" MODIFIED="1754401305858" SOURCE_PROVIDER="com.intellij.coverage.DefaultCoverageFileProvider" RUNNER="coverage.py" COVERAGE_BY_TEST_ENABLED="false" COVERAGE_TRACING_ENABLED="false" WORKING_DIRECTORY="$PROJECT_DIR$/utils" />

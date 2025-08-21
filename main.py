@@ -9,11 +9,13 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 (transiente), come definito a pagina 8–10 del testo allegato.
 """
 import os
+from datetime import datetime
 
+import pandas as pd
 from matplotlib import pyplot as plt
 
 import utils.constants as cs
-from simulation.edge_ccord_scalability_simulator import edge_coord_scalability_simulation
+from simulation.edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, \
     plot_multi_lambda_per_seed, plot_multi_seed_per_lambda, \
@@ -25,12 +27,13 @@ from utils.simulation_output import (
     write_file_edge_scalability, clear_edge_scalability_file,
     write_file_coord_scalability, clear_coord_scalability_file      # ← NEW
 )
-from simulation.improved_edge_ccord_scalability_simulator import edge_coord_scalability_simulation_improved
+from simulation.improved_edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation_improved
 from simulation.improved_simulator import finite_simulation_improved, infinite_simulation_improved
 from utils.improved_simulation_output import write_file_improved, clear_file_improved, print_simulation_stats_improved, \
     plot_multi_lambda_per_seed_improved, plot_multi_seed_per_lambda_improved, \
-    write_infinite_row_improved,  write_file_merged_scalability_improved, clear_merged_scalability_file_improved
-from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs
+    write_infinite_row_improved, write_file_merged_scalability_improved, clear_merged_scalability_file_improved, \
+    clear_infinite_file_improved
+from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, append_stats_improved
 from simulation.improved_edge_scalability_simulator import edge_scalability_simulation_improved
 from utils.improved_simulation_stats import ReplicationStats_improved
 from simulation.improved_coordinator_scalability_simulator import coordinator_scalability_simulation_improved   # ← NEW
@@ -477,16 +480,15 @@ def improved_start_lambda_scan_simulation():
     print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
 
     file_name = "finite_statistics.csv"
-    clear_file_improved(file_name)
+    clear_file_improved(file_name)  # header 'finito' OK
 
-    # Ciclo sulle repliche
+    # Repliche
     for rep in range(cs.REPLICATIONS):
-        # Inizializza il seed per questa replica
         plantSeeds(cs.SEED + rep)
         base_seed = getSeed()
         print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
 
-        # Ciclo su tutti i λ
+        # Tutti gli slot λ
         for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
             print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
 
@@ -495,15 +497,15 @@ def improved_start_lambda_scan_simulation():
 
             results['lambda'] = lam
             results['slot'] = lam_index
-            results['seed'] = base_seed  # forza stesso seed nel CSV
+            results['seed'] = base_seed
             write_file_improved(results, file_name)
 
-            append_stats(replicationStats, results, stats)
+            # ⬇️ questa usa i nuovi nomi edge_NuoviArrivi_* (vedi sim_utils)
+            append_stats_improved(replicationStats, results, stats)
 
     print_simulation_stats_improved(replicationStats, "lambda_scan")
 
     if cs.TRANSIENT_ANALYSIS == 1:
-        # Analisi per seed (già implementata)
         plot_multi_lambda_per_seed_improved(replicationStats.edge_wait_interval, replicationStats.seeds, "edge_node",
                                             "lambda_scan", replicationStats.lambdas, replicationStats.slots)
         plot_multi_lambda_per_seed_improved(replicationStats.cloud_wait_interval, replicationStats.seeds,
@@ -512,28 +514,40 @@ def improved_start_lambda_scan_simulation():
         plot_multi_lambda_per_seed_improved(replicationStats.coord_wait_interval, replicationStats.seeds,
                                             "coord_server_edge", "lambda_scan", replicationStats.lambdas,
                                             replicationStats.slots)
-
         # Analisi per λ
-        plot_multi_seed_per_lambda_improved(replicationStats.edge_wait_interval, replicationStats.seeds, "edge_node",
-                                            "lambda_scan", replicationStats.lambdas, replicationStats.slots)
-        plot_multi_seed_per_lambda_improved(replicationStats.cloud_wait_interval, replicationStats.seeds,
-                                            "cloud_server", "lambda_scan", replicationStats.lambdas,
-                                            replicationStats.slots)
-        plot_multi_seed_per_lambda_improved(replicationStats.coord_wait_interval, replicationStats.seeds,
-                                            "coord_server_edge", "lambda_scan", replicationStats.lambdas,
-                                            replicationStats.slots)
-
+        plot_multi_seed_per_lambda_improved(
+            replicationStats.edge_wait_interval,
+            replicationStats.seeds,
+            "edge_node", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_seed_per_lambda_improved(
+            replicationStats.cloud_wait_interval,
+            replicationStats.seeds,
+            "cloud_server", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
+        plot_multi_seed_per_lambda_improved(
+            replicationStats.coord_wait_interval,
+            replicationStats.seeds,
+            "coord_server_edge", "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+        )
     return replicationStats
+
 
 def improved_start_infinite_lambda_scan_simulation():
     print("\nINFINITE SIMULATION - Aeroporto Ciampino")
 
     file_name = "infinite_statistics.csv"
-    clear_file_improved(file_name)
+    # 🔧 usa l'header 'infinite'
+    clear_infinite_file_improved(file_name)  # <-- fix
 
     replicationStats = ReplicationStats_improved()
 
-    # un solo seed di base per l’infinite horizon
     plantSeeds(cs.SEED)
     base_seed = getSeed()
     print(f"\n★ Infinite horizon con seed base = {base_seed}")
@@ -549,18 +563,20 @@ def improved_start_infinite_lambda_scan_simulation():
             results['seed'] = base_seed
             results['batch'] = batch_index
             write_infinite_row_improved(results, file_name)
-            append_stats(replicationStats, results, batch_stats)
+
+            # ⬇️ questa salva Edge_NuoviArrivi_* come 'edge' negli array
+            append_stats_improved(replicationStats, results, batch_stats)
 
     print_simulation_stats_improved(replicationStats, "lambda_scan_infinite")
     return replicationStats
+
 
 def improved_start_coord_scalability_simulation():
     """
     Coordinator Scalability:
     - Legge output/edge_scalability_statistics.csv, calcola per ciascun λ la MEDIA dei server Edge usati (per slot).
     - Usa quella media (arrotondata, min 1) come N fisso di server Edge.
-    - Scala dinamicamente i server del Coordinator con le stesse soglie di utilizzo degli Edge.
-    - Esporta CSV/JSON/TXT come fatto per Edge.
+    - Scala dinamicamente i server del Coordinator.
     """
     import os
     import pandas as pd
@@ -571,14 +587,11 @@ def improved_start_coord_scalability_simulation():
     file_name = "coord_scalability_statistics.csv"
     clear_coord_scalability_file_improved(file_name)
 
-    # carica CSV Edge già generato
     path_edge_csv = os.path.join("output_improved", "edge_scalability_statistics.csv")
     if not os.path.isfile(path_edge_csv):
         raise FileNotFoundError("Non trovo output_improved/edge_scalability_statistics.csv. Esegui prima la scalabilità Edge.")
 
     df = pd.read_csv(path_edge_csv)
-
-    # media server per slot di λ (robusto a floating di λ)
     slot_to_avg = df.groupby('slot')['edge_server_number'].mean().to_dict()
 
     print("COORDINATOR SCALABILITY SIMULATION")
@@ -593,19 +606,20 @@ def improved_start_coord_scalability_simulation():
             fixed_edge_servers = max(1, min(int(round(slot_to_avg.get(slot_index, 1))), cs.EDGE_SERVERS_MAX))
 
             stop = cs.SLOT_DURATION
-            results, stats = coordinator_scalability_simulation_improved(stop, forced_lambda=lam, slot_index=slot_index,
-                                                                         fixed_edge_servers=fixed_edge_servers)
+            results, stats = coordinator_scalability_simulation_improved(
+                stop, forced_lambda=lam, slot_index=slot_index, fixed_edge_servers=fixed_edge_servers
+            )
 
             results['seed'] = seed
             results['lambda'] = lam
             results['slot'] = slot_index
 
             write_file_coord_scalability_improved(results, file_name)
+            # ⬇️ salva correttamente i tempi del Coordinator
             append_coord_scalability_stats(replicationStats, results, stats)
 
     from utils.improved_simulation_output import print_simulation_stats_improved
     print_simulation_stats_improved(replicationStats, "coord_scalability")
-
     return replicationStats
 
 
@@ -633,20 +647,16 @@ def improved_start_edge_scalability_simulation():
 
             write_file_edge_scalability_improved(results, file_name)
 
-
+            # ⬇️ salva Edge_NuoviArrivi_avg_wait come 'edge'
             append_edge_scalability_stats(replicationStats, results, stats)
 
     print_simulation_stats_improved(replicationStats, "edge_scalability")
-
     return replicationStats
+
 
 def improved_start_scalability_simulation():
     """
-    Scalabilità UNIFICATA (Edge + Coordinator) con metodo a repliche:
-    - Esegue tutte le repliche per ciascun p_c (in cs.PC_VALUES), poi passa al successivo.
-    - Scrive CSV (una riga per replica×slot).
-    - Grafico: 1 per p_c (media a gradini del numero di server sulle repliche).
-    - Report cumulativo per p_c: min/max/media server, log UP/DOWN con tempo e slot, W ± CI(95%) per Edge/Cloud/Coord.
+    Scalabilità UNIFICATA (Edge + Coordinator).
     """
     file_name = "merged_scalability_statistics.csv"
     clear_merged_scalability_file_improved(file_name)
@@ -662,13 +672,10 @@ def improved_start_scalability_simulation():
         decision_interval = slot_duration / 20.0
 
     pc_values = getattr(cs, "PC_VALUES", [0.1, 0.4, 0.5, 0.7, 0.9])
-
     print("MERGED (EDGE+COORD) SCALABILITY SIMULATION")
 
     for pc in pc_values:
-        set_pc_and_update_probs(pc)  # imposta cs.P_C, cs.P_COORD e le condizionate P1..P4
-        s = cs.P1_PROB + cs.P2_PROB + cs.P3_PROB + cs.P4_PROB
-
+        set_pc_and_update_probs(pc)
         print(f"\n### p_c = {pc:.2f} (P_COORD={cs.P_COORD:.2f}) | "
               f"P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
 
@@ -699,7 +706,8 @@ def improved_start_scalability_simulation():
                 res["p1"], res["p2"], res["p3"], res["p4"] = cs.P1_PROB, cs.P2_PROB, cs.P3_PROB, cs.P4_PROB
                 write_file_merged_scalability_improved(res, file_name)
 
-                edge_wait_this_rep.append(res["edge_avg_wait"])
+                # 🔧 campi aggiornati
+                edge_wait_this_rep.append(res["edge_NuoviArrivi_avg_wait"])
                 coord_wait_this_rep.append(res["coord_avg_wait"])
                 cloud_wait_this_rep.append(res["cloud_avg_wait"])
                 edge_servers_all.append(res["edge_server_number"])
@@ -800,7 +808,72 @@ def improved_start_scalability_simulation():
     print(f"\nCSV scritto: output_improved/{file_name}")
 
 
+def _mean_ci_95(series):
+    s = pd.to_numeric(series, errors='coerce').dropna()
+    n = len(s)
+    if n == 0:
+        return (None, None, 0)
+    mean = float(s.mean())
+    if n < 2:
+        return (mean, 0.0, n)
+    std = float(s.std(ddof=1))
+    margin = 1.96 * (std / (n ** 0.5))
+    return (mean, margin, n)
 
+def summarize_by_lambda(input_csv, output_txt=None, exclude_cols=None):
+    if not os.path.exists(input_csv):
+        raise FileNotFoundError(f"File not found: {input_csv}")
+    df = pd.read_csv(input_csv)
+    if df.empty:
+        raise ValueError(f"No data in {input_csv}")
+
+    df.columns = [c.strip() for c in df.columns]
+    if 'lambda' not in df.columns:
+        raise ValueError(f"'lambda' column not found in {input_csv}")
+
+    exclude = set(exclude_cols or [])
+    exclude |= {
+        'seed','slot','lambda','batch',
+        'pc','p1','p2','p3','p4',
+        'edge_scal_trace','coord_scal_trace',
+        'server_utilization_by_count'
+    }
+
+    metric_cols = [c for c in df.columns if c not in exclude and pd.api.types.is_numeric_dtype(df[c])]
+    if not metric_cols:
+        raise ValueError(f"No numeric metric columns found in {input_csv}")
+
+    grouped = df.groupby('lambda', dropna=True)
+
+    lines = []
+    title = f"Summary by λ — {os.path.basename(input_csv)}"
+    lines.append(f"=== {title} ===")
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("Note: mean ± 95% CI (z=1.96), aggregated over all rows for each λ.\n")
+
+    def bucket_key(col):
+        if col.startswith('edge_NuoviArrivi_'): return (0, col)
+        if col.startswith('edge_Feedback_'):    return (1, col)
+        if col.startswith('cloud_'):            return (2, col)
+        if col.startswith('coord_'):            return (3, col)
+        if col.startswith('edge_'):             return (4, col)
+        return (5, col)
+
+    for lam, g in grouped:
+        lines.append(f"--- λ = {lam:.6f}  (rows={len(g)}) ---")
+        for col in sorted(metric_cols, key=bucket_key):
+            mean, margin, n = _mean_ci_95(g[col])
+            if mean is None:
+                continue
+            lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+        lines.append("")
+
+    if output_txt is None:
+        output_txt = os.path.join(os.path.dirname(input_csv), f"summary_by_lambda_Global_Table.txt")
+
+    with open(output_txt, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+    return output_txt
 
 
 
@@ -808,20 +881,34 @@ if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
     """
+
     print_csv_legend()
+    print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
+
     stats_finite = start_lambda_scan_simulation()
     stats_infinite = start_infinite_lambda_scan_simulation()
-    start_edge_scalability_simulation()
-    start_coord_scalability_simulation()
+
     start_scalability_simulation()
-    print("Simulation completed successfully.\n")
+
+    summarize_by_lambda("output/finite_statistics.csv")
+
+    print("Statsitche FINITE comulative per Standard.\n")
+
+    print("FINE---- STANDARD MODEL SIMULTIONS.\n")
 
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
     improved_stats_finite = improved_start_lambda_scan_simulation()
     improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
-    improved_start_edge_scalability_simulation()
-    improved_start_coord_scalability_simulation()
+
     improved_start_scalability_simulation()
+
+    # finite
+    summarize_by_lambda("output_improved/finite_statistics.csv")
+
+    print("Statsitche FINITE comulative per Migliorativo.\n")
+
     print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
+
+
 
 

@@ -253,11 +253,11 @@ def execute(stats, stop, forced_lambda=None):
 def return_stats(stats, t, seed):
     # Assicurati che calculate_area_queue() sia stato chiamato prima
     edge_W  = stats.area_edge.node  / stats.index_edge if stats.index_edge  > 0 else 0.0
-    cloud_W = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    cloud_W = cs.CLOUD_SERVICE  # Cloud è un server infinito
     coord_W = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0.0
 
     edge_Wq  = stats.area_edge.queue  / stats.index_edge if stats.index_edge  > 0 else 0.0
-    cloud_Wq = stats.area_cloud.queue / stats.index_cloud if stats.index_cloud > 0 else 0.0
+    cloud_Wq = 0.0 # Cloud è un server infinito, quindi non ha coda
     coord_Wq = stats.area_coord.queue / stats.index_coord if stats.index_coord > 0 else 0.0
 
     edge_L  = stats.area_edge.node  / t if t > 0 else 0.0
