@@ -467,35 +467,42 @@ def print_simulation_stats_improved(stats, sim_type):
     print("\n=== Infinite Horizon Simulation - Batch Means Summary ===" if is_infinite
           else f"\nStats after {cs.REPLICATIONS} replications:")
 
-    # tempi di risposta
-    _print_ci_improved("Edge Node - Average wait time", stats.edge_wait_times)
+
+
+    _print_ci_improved("Edge_NuoviArrivi - Average wait time", stats.edge_wait_times)
+    _print_ci_improved("Edge_NuoviArrivi (Class E) - Avg delay", stats.edge_E_delay_times)
+    _print_ci_improved("Edge_NuoviArrivi (Class E) - Avg response", stats.edge_E_response_times)
+    _print_ci_improved("Edge_NuoviArrivi - Average delay (queue)", getattr(stats, 'edge_delay_times', []))
+    _print_ci_improved("Edge_NuoviArrivi - Avg number in node (L)", getattr(stats, 'edge_L', []))
+    _print_ci_improved("Edge_NuoviArrivi - Avg number in queue (Lq)", getattr(stats, 'edge_Lq', []))
+    _print_ci_improved("Edge_NuoviArrivi - Utilization", getattr(stats, 'edge_utilization', []))
+    _print_ci_improved("Edge_NuoviArrivi - Throughput", getattr(stats, 'edge_X', []))
+
     _print_ci_improved("Cloud Server - Average wait time", stats.cloud_wait_times)
     _print_ci_improved("Coordinator Edge - Average wait time", stats.coord_wait_times)
 
     # tempi di e attesa risposta per job di classe E
-    _print_ci_improved("Edge Node (Class E) - Avg delay", stats.edge_E_delay_times)
-    _print_ci_improved("Edge Node (Class E) - Avg response", stats.edge_E_response_times)
+
 
     # nuovi: tempi d'attesa in coda
-    _print_ci_improved("Edge Node - Average delay (queue)", getattr(stats, 'edge_delay_times', []))
+
     _print_ci_improved("Cloud Server - Average delay (queue)", getattr(stats, 'cloud_delay_times', []))
     _print_ci_improved("Coordinator Edge - Average delay (queue)", getattr(stats, 'coord_delay_times', []))
 
     # L e Lq
-    _print_ci_improved("Edge Node - Avg number in node (L)", getattr(stats, 'edge_L', []))
-    _print_ci_improved("Edge Node - Avg number in queue (Lq)", getattr(stats, 'edge_Lq', []))
+
     _print_ci_improved("Cloud Server - Avg number in node (L)", getattr(stats, 'cloud_L', []))
     _print_ci_improved("Cloud Server - Avg number in queue (Lq)", getattr(stats, 'cloud_Lq', []))
     _print_ci_improved("Coordinator - Avg number in node (L)", getattr(stats, 'coord_L', []))
     _print_ci_improved("Coordinator - Avg number in queue (Lq)", getattr(stats, 'coord_Lq', []))
 
     # utilizzazioni
-    _print_ci_improved("Edge Node - Utilization", getattr(stats, 'edge_utilization', []))
+
     _print_ci_improved("Coordinator - Utilization", getattr(stats, 'coord_utilization', []))
     _print_ci_improved("Cloud - Avg busy servers", getattr(stats, 'cloud_busy', []))
 
     # throughput
-    _print_ci_improved("Edge Node - Throughput", getattr(stats, 'edge_X', []))
+
     _print_ci_improved("Cloud - Throughput", getattr(stats, 'cloud_X', []))
     _print_ci_improved("Coordinator - Throughput", getattr(stats, 'coord_X', []))
 

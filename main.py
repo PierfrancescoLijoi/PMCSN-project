@@ -883,18 +883,6 @@ if __name__ == "__main__":
     """
 
     print_csv_legend()
-    print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
-
-    stats_finite = start_lambda_scan_simulation()
-    stats_infinite = start_infinite_lambda_scan_simulation()
-
-    start_scalability_simulation()
-
-    summarize_by_lambda("output/finite_statistics.csv")
-
-    print("Statsitche FINITE comulative per Standard.\n")
-
-    print("FINE---- STANDARD MODEL SIMULTIONS.\n")
 
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
     improved_stats_finite = improved_start_lambda_scan_simulation()

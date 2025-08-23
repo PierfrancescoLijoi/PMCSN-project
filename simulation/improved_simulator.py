@@ -12,7 +12,6 @@
 #       la coda "feedback" è interna al flusso e non ha metriche dedicate.
 
 from utils.sim_utils import *
-from utils.improved_simulation_output import write_file_improved, plot_analysis_improved
 from utils.improved_simulation_stats import SimulationStats_improved, ReplicationStats_improved
 import utils.constants as cs
 from libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_random
