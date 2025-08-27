@@ -57,6 +57,17 @@ class SimulationStats:
         self.cloud_wait_times = []
         self.coord_wait_times = []
 
+        self.number_C = 0  # # di job C presenti all'Edge (coda + servizio)
+        self.index_edge_E = 0  # completamenti Edge di job E
+        self.index_edge_C = 0  # completamenti Edge di job C
+        self.edge_E_L = []
+        self.edge_E_Lq = []
+        self.edge_C_L = []
+        self.edge_C_Lq = []
+
+        self.edge_E_wait_times_interval = []  # [(t, W_E(t))]
+        self.edge_C_wait_times_interval = []  # [(t, W_C(t))]
+
     def reset(self, start_time):
         self.t.current = start_time
         self.t.arrival = start_time
@@ -68,6 +79,11 @@ class SimulationStats:
         self.queue_coord_low.clear()
         self.count_E = 0  # Reset del contatore E
         self.count_C = 0  # Reset del contatore C
+        self.number_C = 0
+        self.index_edge_E = 0
+        self.index_edge_C = 0
+        self.edge_E_wait_times_interval = []
+        self.edge_C_wait_times_interval = []
 
     def reset_infinite(self):
         """
@@ -109,6 +125,10 @@ class SimulationStats:
         self.number_cloud = 0
         self.number_coord = 0
 
+        self.number_C = 0
+        self.index_edge_E = 0
+        self.index_edge_C = 0
+
         # tempi di completamento (nessun job in corso)
         self.t.completion_edge = cs.INFINITY
         self.t.completion_cloud = cs.INFINITY
@@ -121,6 +141,9 @@ class SimulationStats:
 
         self.area_E.queue = self.area_E.node - self.area_E.service
         self.area_C.queue = self.area_C.node - self.area_C.service
+
+
+
 
 class ReplicationStats:
     def __init__(self):
@@ -159,3 +182,17 @@ class ReplicationStats:
         self.edge_wait_interval = []
         self.cloud_wait_interval = []
         self.coord_wait_interval = []
+
+        self.edge_E_util_times = []  # opzionale
+        self.edge_C_util_times = []  # opzionale
+        self.edge_C_delay_times = []
+        self.edge_C_response_times = []
+
+        self.edge_E_L = []
+        self.edge_E_Lq = []
+        self.edge_C_L = []
+        self.edge_C_Lq = []
+
+        self.edge_E_wait_interval = []  # lista per-replica di [(t, W_E)]
+        self.edge_C_wait_interval = []  # lista per-replica di [(t, W_C)]
+

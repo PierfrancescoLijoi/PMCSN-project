@@ -108,8 +108,8 @@ CLOUD_SERVICE = 0.8
 # - P1/P2: servizio rapido e regolare → distribuzione esponenziale
 # - P3/P4: servizio variabile e più lungo → distribuzione lognormale
 # Riferimento: Sezione "Coordinator Server Edge"
-COORD_SERVICE_P1P2 = 0.4#con questi valori scala    # media esponenziale
-COORD_SERVICE_P3P4 = 0.6# con questi valori scala   # media lognormale
+COORD_SERVICE_P1P2 = 0.4   # media esponenziale
+COORD_SERVICE_P3P4 = 0.6   # media lognormale
 
 
 # -------------------------

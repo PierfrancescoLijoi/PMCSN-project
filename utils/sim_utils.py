@@ -164,13 +164,17 @@ def Min(*args):
 
 
 
-def remove_batch(stats, n):
-    if n < 0:
-        raise ValueError()
-    for attr in dir(stats):
-        value = getattr(stats, attr)
+def remove_batch(stats, n, renumber_batches=True):
+    if n <= 0: return
+    for name, value in vars(stats).items():
         if isinstance(value, list):
-            setattr(stats, attr, value[n:])
+            setattr(stats, name, value[n:])
+    if hasattr(stats, "results") and isinstance(stats.results, list):
+        stats.results = stats.results[n:]
+        if renumber_batches:
+            for i, row in enumerate(stats.results):
+                row["batch"] = i
+
 
 def reset_infinite(self):
     """
@@ -220,6 +224,8 @@ def reset_infinite(self):
 # -------------------------------
 # INTERVALLI DI CONFIDENZA
 # -------------------------------
+import numpy as np
+from scipy import stats
 def calculate_confidence_interval(data, confidence=0.95):
     data = list(map(float, data))  # ← forza i float
     if len(data) < 2:
@@ -249,6 +255,13 @@ def append_stats(replicationStats, results, stats):
     replicationStats.edge_E_delay_times.append(results['edge_E_avg_delay'])
     replicationStats.edge_E_response_times.append(results['edge_E_avg_response'])
 
+    # NEW: C
+    replicationStats.edge_C_delay_times.append(results['edge_C_avg_delay'])
+    replicationStats.edge_C_response_times.append(results['edge_C_avg_response'])
+    replicationStats.edge_E_util_times.append(results['edge_E_utilization'])
+    replicationStats.edge_C_util_times.append(results['edge_C_utilization'])
+
+
     # nuovi: code
     replicationStats.edge_delay_times.append(results['edge_avg_delay'])
     replicationStats.cloud_delay_times.append(results['cloud_avg_delay'])
@@ -261,6 +274,10 @@ def append_stats(replicationStats, results, stats):
     replicationStats.cloud_Lq.append(results['cloud_Lq'])
     replicationStats.coord_L.append(results['coord_L'])
     replicationStats.coord_Lq.append(results['coord_Lq'])
+    replicationStats.edge_E_L.append(results['edge_E_L'])
+    replicationStats.edge_E_Lq.append(results['edge_E_Lq'])
+    replicationStats.edge_C_L.append(results['edge_C_L'])
+    replicationStats.edge_C_Lq.append(results['edge_C_Lq'])
 
     # utilizzazioni
     replicationStats.edge_utilization.append(results['edge_utilization'])
@@ -272,10 +289,14 @@ def append_stats(replicationStats, results, stats):
     replicationStats.cloud_X.append(results['cloud_throughput'])
     replicationStats.coord_X.append(results['coord_throughput'])
 
-    # transiente (resta uguale)
-    replicationStats.edge_wait_interval.append(stats.edge_wait_times)
-    replicationStats.cloud_wait_interval.append(stats.cloud_wait_times)
-    replicationStats.coord_wait_interval.append(stats.coord_wait_times)
+    replicationStats.edge_E_wait_interval.append(getattr(stats, 'edge_E_wait_times_interval', []))
+    replicationStats.edge_C_wait_interval.append(getattr(stats, 'edge_C_wait_times_interval', []))
+
+    # transiente (safe anche qui)
+    replicationStats.edge_wait_interval.append(getattr(stats, 'edge_wait_times', []))
+    replicationStats.cloud_wait_interval.append(getattr(stats, 'cloud_wait_times', []))
+    replicationStats.coord_wait_interval.append(getattr(stats, 'coord_wait_times', []))
+
 
 def append_stats_improved(replicationStats, results, stats):
     # meta

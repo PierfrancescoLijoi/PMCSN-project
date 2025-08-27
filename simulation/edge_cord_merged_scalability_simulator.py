@@ -65,35 +65,58 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
     cap_time_edge = 0.0
     cap_time_coord = 0.0
 
+    # --- NUOVO: busy-time totali sull'intero orizzonte (non azzerati tra finestre) ---
+    total_edge_busy = 0.0
+    total_coord_busy = 0.0
+    total_edge_busy_E = 0.0
+    total_edge_busy_C = 0.0
+
     # Helper assegnazioni
     def edge_assign_if_possible(sidx):
+        nonlocal total_edge_busy, total_edge_busy_E, total_edge_busy_C
         if not edge_server_busy[sidx] and stats.queue_edge:
             job = stats.queue_edge.pop(0)  # "E" o "C"
-            service = GetServiceEdgeE() if job == "E" else GetServiceEdgeC()
+
+            # servizio per classe
+            if job == "E":
+                service = GetServiceEdgeE()
+                stats.area_E.service += service
+                total_edge_busy_E += service
+            else:
+                service = GetServiceEdgeC()
+                stats.area_C.service += service
+                total_edge_busy_C += service
+
+            # pianifica completamento su quel server Edge
             edge_completion_times[sidx] = stats.t.current + service
             edge_server_busy[sidx] = True
             edge_server_jobtype[sidx] = job
+
+            # totale Edge
             stats.area_edge.service += service
-            if job == "E":
-                stats.area_E.service += service
+            total_edge_busy += service
             return True
         return False
 
     def coord_assign_if_possible(sidx):
+        nonlocal total_coord_busy
         if not coord_server_busy[sidx]:
-            # priorità: coda high (P3/P4) poi low (P1/P2)
+            # priorità: high poi low
             if stats.queue_coord_high:
                 cls = stats.queue_coord_high.pop(0)  # "P3"|"P4"
                 service = GetServiceCoordP3P4()
             elif stats.queue_coord_low:
-                cls = stats.queue_coord_low.pop(0)   # "P1"|"P2"
+                cls = stats.queue_coord_low.pop(0)  # "P1"|"P2"
                 service = GetServiceCoordP1P2()
             else:
                 return False
+
             coord_completion_times[sidx] = stats.t.current + service
             coord_server_busy[sidx] = True
             coord_server_ptype[sidx] = cls
+
             stats.area_coord.service += service
+            total_coord_busy += service
             return True
         return False
 
@@ -131,8 +154,8 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
         if stats.number_cloud > 0: stats.area_cloud.node += delta * stats.number_cloud
         if stats.number_coord > 0: stats.area_coord.node += delta * stats.number_coord
 
-        if stats.number_E > 0:
-            stats.area_E.node += delta * stats.number_E
+        if stats.number_E > 0: stats.area_E.node += delta * stats.number_E  # <-- UNA volta
+        if stats.number_C > 0: stats.area_C.node += delta * stats.number_C  # <-- C già ok
 
 
         # capacità (server attivi * tempo)
@@ -200,49 +223,65 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
             kick_assign_all()
             continue
 
+        #
         # Evento: COMPLETAMENTO EDGE
         for i in range(cs.EDGE_SERVERS):
             if stats.t.current == edge_completion_times[i]:
                 completed_type = edge_server_jobtype[i]
-                # libera il server
+
+                # libera il server i
                 edge_server_busy[i] = False
                 edge_completion_times[i] = cs.INFINITY
                 edge_server_jobtype[i] = None
 
+                # contabilità Edge (totale)
                 stats.index_edge += 1
                 stats.number_edge -= 1
 
                 if completed_type == "E":
+                    # completamento di un job E
+                    stats.index_edge_E += 1
                     stats.number_E -= 1
+
                     # routing: Cloud oppure Coordinator
                     selectStream(3)
                     r = rng_random()
                     if r < cs.P_C:
-                        # Cloud
+                        # → Cloud (∞-server serializzato)
                         stats.number_cloud += 1
                         if stats.number_cloud == 1:
                             service = GetServiceCloud()
                             stats.t.completion_cloud = stats.t.current + service
                             stats.area_cloud.service += service
-                            stats.area_C.service += service
                     else:
-                        # Coordinator: classi P1..P4
+                        # → Coordinator: classi P1..P4
                         stats.number_coord += 1
                         coord_r = (r - cs.P_C) / max(1e-12, (1.0 - cs.P_C))
                         if coord_r < cs.P1_PROB:
-                            stats.queue_coord_low.append("P1"); stats.count_E_P1 += 1
+                            stats.queue_coord_low.append("P1");
+                            stats.count_E_P1 += 1
                         elif coord_r < cs.P1_PROB + cs.P2_PROB:
-                            stats.queue_coord_low.append("P2"); stats.count_E_P2 += 1
+                            stats.queue_coord_low.append("P2");
+                            stats.count_E_P2 += 1
                         elif coord_r < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:
-                            stats.queue_coord_high.append("P3"); stats.count_E_P3 += 1
+                            stats.queue_coord_high.append("P3");
+                            stats.count_E_P3 += 1
                         else:
-                            stats.queue_coord_high.append("P4"); stats.count_E_P4 += 1
-                        # prova assegnazione coord
+                            stats.queue_coord_high.append("P4");
+                            stats.count_E_P4 += 1
+
+                        # prova ad assegnare subito al Coordinator
                         for j in range(cs.COORD_EDGE_SERVERS):
                             if coord_assign_if_possible(j):
                                 break
-                # Se era "C" (ritorno dal Cloud) il job termina qui
 
+                else:
+                    # completed_type == "C": termina all'Edge
+                    stats.index_edge_C += 1
+                    stats.number_C -= 1
+                    # (facoltativo) stats.count_C += 1
+
+                # dopo un completamento prova ad assegnare nuovi job
                 kick_assign_all()
                 break  # gestito un completamento
 
@@ -254,7 +293,7 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
                 service = GetServiceCloud()
                 stats.t.completion_cloud = stats.t.current + service
                 stats.area_cloud.service += service
-                stats.area_C.service += service
+
             else:
                 stats.t.completion_cloud = cs.INFINITY
 
@@ -262,6 +301,7 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
             stats.queue_edge.append("C")
             # FIX: incrementa il numero in sistema all'Edge per il ritorno dal Cloud
             stats.number_edge += 1
+            stats.number_C += 1
             kick_assign_all()
 
         # Evento: COMPLETAMENTO COORD
@@ -279,14 +319,51 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
                     kick_assign_all()
                 break
 
-    stats.calculate_area_queue()
-    # Risultati
+    stats.calculate_area_queue()  # mantiene area_x.node; Lq lo calcoliamo sotto con i busy totali
     sim_time = max(1e-12, stats.t.current - cs.START)
 
-    # Utilizzazioni su tutto l’intervallo (tempo occupato totale / capacità totale)
-    edge_util = (stats.area_edge.service / max(1e-12, cap_time_edge)) if cap_time_edge > 0 else 0.0
-    coord_util = (stats.area_coord.service / max(1e-12, cap_time_coord)) if cap_time_coord > 0 else 0.0
-    cloud_avg_busy = stats.area_cloud.service / sim_time  # ∞-server: media server occupati
+    # --- Edge (totali) ---
+    edge_W = (stats.area_edge.node / stats.index_edge) if stats.index_edge > 0 else 0.0
+    edge_Wq = ((stats.area_edge.node - total_edge_busy) / stats.index_edge) if stats.index_edge > 0 else 0.0
+    edge_L = stats.area_edge.node / sim_time
+    edge_Lq = (stats.area_edge.node - total_edge_busy) / sim_time
+    edge_S = (total_edge_busy / stats.index_edge) if stats.index_edge > 0 else 0.0
+    edge_X = stats.index_edge / sim_time
+    edge_busy_avg = total_edge_busy / sim_time
+    edge_util = (total_edge_busy / cap_time_edge) if cap_time_edge > 0 else 0.0  # ∈ [0,1]
+
+    # --- Edge (per classe) ---
+    edge_E_W = (stats.area_E.node / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
+    edge_E_Wq = ((stats.area_E.node - total_edge_busy_E) / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
+    edge_E_L = stats.area_E.node / sim_time
+    edge_E_Lq = (stats.area_E.node - total_edge_busy_E) / sim_time
+    edge_E_S = (total_edge_busy_E / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
+    edge_E_util = (total_edge_busy_E / cap_time_edge) if cap_time_edge > 0 else 0.0
+
+    edge_C_W = (stats.area_C.node / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+    edge_C_Wq = ((stats.area_C.node - total_edge_busy_C) / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+    edge_C_L = stats.area_C.node / sim_time
+    edge_C_Lq = (stats.area_C.node - total_edge_busy_C) / sim_time
+    edge_C_S = (total_edge_busy_C / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+    edge_C_util = (total_edge_busy_C / cap_time_edge) if cap_time_edge > 0 else 0.0
+
+    # --- Cloud (∞-server) ---
+    cloud_W = cs.CLOUD_SERVICE
+    cloud_Wq = 0.0
+    cloud_Lq = 0.0
+    cloud_L = stats.area_cloud.node / sim_time
+    cloud_S = stats.area_cloud.service / stats.index_cloud
+    cloud_X = stats.index_cloud / sim_time
+    cloud_busy_avg = stats.area_cloud.service / sim_time
+
+    # --- Coordinator ---
+    coord_W = (stats.area_coord.node / stats.index_coord) if stats.index_coord > 0 else 0.0
+    coord_Wq = ((stats.area_coord.node - total_coord_busy) / stats.index_coord) if stats.index_coord > 0 else 0.0
+    coord_L = stats.area_coord.node / sim_time
+    coord_Lq = (stats.area_coord.node - total_coord_busy) / sim_time
+    coord_S = (total_coord_busy / stats.index_coord) if stats.index_coord > 0 else 0.0
+    coord_X = stats.index_coord / sim_time
+    coord_util = (total_coord_busy / cap_time_coord) if cap_time_coord > 0 else 0.0
 
     results = {
         "seed": seed,
@@ -295,39 +372,43 @@ def edge_coord_scalability_simulation(stop, forced_lambda=None, slot_index=None)
 
         # Edge
         "edge_server_number": cs.EDGE_SERVERS,
-        "edge_avg_wait": (stats.area_edge.node / max(1, stats.index_edge)) if stats.index_edge > 0 else 0.0,
-        "edge_avg_delay": (stats.area_edge.node / max(1, stats.job_arrived)) if stats.job_arrived > 0 else 0.0,
-        "edge_L": stats.area_edge.node / sim_time,
-        "edge_Lq": None,
-        "edge_service_time_mean": (stats.area_edge.service / max(1, stats.index_edge)) if stats.index_edge > 0 else 0.0,
+        "edge_avg_wait": edge_W, "edge_avg_delay": edge_Wq,
+        "edge_L": edge_L, "edge_Lq": edge_Lq,
+        "edge_service_time_mean": edge_S,
+        "edge_avg_busy_servers": edge_busy_avg,
+        "edge_throughput": edge_X,
         "edge_utilization": edge_util,
-        "edge_throughput": stats.index_edge / sim_time,
+        "edge_E_utilization": edge_E_util,
+        "edge_C_utilization": edge_C_util,
 
-        'edge_E_avg_delay': (stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0,
-        'edge_E_avg_response': ((stats.area_E.queue / stats.count_E) if stats.count_E > 0 else 0.0) \
-                               + cs.EDGE_SERVICE_E,
+        "edge_E_avg_delay": edge_E_Wq,
+        "edge_E_avg_response": edge_E_W,
+        "edge_C_avg_delay": edge_C_Wq,
+        "edge_C_avg_response": edge_C_W,
+        "edge_E_L": edge_E_L, "edge_E_Lq": edge_E_Lq,
+        "edge_C_L": edge_C_L, "edge_C_Lq": edge_C_Lq,
 
         # Cloud
-        "cloud_avg_wait":  cs.CLOUD_SERVICE ,
-        "cloud_avg_delay": 0.0,
-        "cloud_L": stats.area_cloud.node / sim_time,
-        "cloud_Lq": None,
-        "cloud_service_time_mean": (stats.area_cloud.service / max(1, stats.index_cloud)) if stats.index_cloud > 0 else 0.0,
-        "cloud_avg_busy_servers": cloud_avg_busy,
-        "cloud_throughput": stats.index_cloud / sim_time,
+        "cloud_avg_wait": cloud_W, "cloud_avg_delay": cloud_Wq,
+        "cloud_L":  cloud_busy_avg, "cloud_Lq": cloud_Lq,
+        "cloud_service_time_mean": cloud_S,
+        "cloud_avg_busy_servers": cloud_busy_avg,
+        "cloud_throughput": cloud_X,
 
         # Coordinator
         "coord_server_number": cs.COORD_EDGE_SERVERS,
-        "coord_avg_wait": (stats.area_coord.node / max(1, stats.index_coord)) if stats.index_coord > 0 else 0.0,
-        "coord_avg_delay": (stats.area_coord.node / max(1, stats.job_arrived)) if stats.job_arrived > 0 else 0.0,
-        "coord_L": stats.area_coord.node / sim_time,
-        "coord_Lq": None,
-        "coord_service_time_mean": (stats.area_coord.service / max(1, stats.index_coord)) if stats.index_coord > 0 else 0.0,
+        "coord_avg_wait": coord_W, "coord_avg_delay": coord_Wq,
+        "coord_L": coord_L, "coord_Lq": coord_Lq,
+        "coord_service_time_mean": coord_S,
         "coord_utilization": coord_util,
-        "coord_throughput": stats.index_coord / sim_time,
+        "coord_throughput": coord_X,
 
-        # Tracce autoscaling
+        # (facoltativo) meta: proba
+        "pc": cs.P_C, "p1": cs.P1_PROB, "p2": cs.P2_PROB, "p3": cs.P3_PROB, "p4": cs.P4_PROB,
+
+        # tracce autoscaling
         "edge_scal_trace": edge_scal_trace,
         "coord_scal_trace": coord_scal_trace,
     }
     return results
+

@@ -461,8 +461,8 @@ def save_summary_txt_improved(summary, sim_type, filename=None):
     return path
 
 def print_simulation_stats_improved(stats, sim_type):
-    # Costruisci il riepilogo per file JSON/TXT
-    summary = build_summary_dict_improved(stats, sim_type)
+
+
     is_infinite = sim_type in ("lambda_scan_infinite","infinite","infinite_horizon")
     print("\n=== Infinite Horizon Simulation - Batch Means Summary ===" if is_infinite
           else f"\nStats after {cs.REPLICATIONS} replications:")
@@ -506,11 +506,6 @@ def print_simulation_stats_improved(stats, sim_type):
     _print_ci_improved("Cloud - Throughput", getattr(stats, 'cloud_X', []))
     _print_ci_improved("Coordinator - Throughput", getattr(stats, 'coord_X', []))
 
-    # salvataggio persistente
-    json_path = save_summary_json_improved(summary, sim_type)
-    txt_path = save_summary_txt_improved(summary, sim_type)  # se non vuoi il .txt, commenta questa riga
-
-    print(f"\n[Saved summaries] JSON: {json_path}  TXT: {txt_path}")
 
 
 def plot_analysis_improved(wait_times, seeds, name, sim_type):

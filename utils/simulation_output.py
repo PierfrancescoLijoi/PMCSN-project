@@ -29,12 +29,17 @@ header = [
     "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
     "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
     "edge_E_avg_delay", "edge_E_avg_response",
+    "edge_C_avg_delay","edge_C_avg_response",
 
-    # L, Lq
+    # L, Lq (totali)
     "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
+    # L, Lq per classe (Edge)  ← NEW
+    "edge_E_L","edge_E_Lq","edge_C_L","edge_C_Lq",
 
     # utilizzazioni per centro
     "edge_utilization","coord_utilization","cloud_avg_busy_servers",
+    # (se le esporti) utilizzazioni per classe (Edge)
+    "edge_E_utilization","edge_C_utilization",
 
     # throughput
     "edge_throughput","cloud_throughput","coord_throughput",
@@ -45,96 +50,8 @@ header = [
     # contatori esistenti
     "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C",
 
-    # legacy per compatibilità
-    "E_utilization","C_utilization"
-]
-
-header_infinite =[
-    "seed", "slot", "lambda", "batch"
-
-    # tempi
-    "edge_avg_wait", "cloud_avg_wait", "coord_avg_wait",
-    "edge_avg_delay", "cloud_avg_delay", "coord_avg_delay",
-     "edge_E_avg_delay", "edge_E_avg_response",
-
-    # L, Lq
-    "edge_L", "edge_Lq", "cloud_L", "cloud_Lq", "coord_L", "coord_Lq",
-
-    # utilizzazioni per centro
-    "edge_utilization", "coord_utilization", "cloud_avg_busy_servers",
-
-    # throughput
-    "edge_throughput", "cloud_throughput", "coord_throughput",
-
-    # tempi di servizio realizzati
-    "edge_service_time_mean", "cloud_service_time_mean", "coord_service_time_mean",
-
-    # contatori esistenti
-    "count_E", "count_E_P1", "count_E_P2", "count_E_P3", "count_E_P4", "count_C",
-
-    # legacy per compatibilità
-    "E_utilization", "C_utilization"
-]
-
-header_edge_scalability = [
-    "seed","lambda","slot",
-
-    # Edge
-    "edge_server_number",
-    "edge_avg_wait","edge_avg_delay",
-    "edge_L","edge_Lq",
-    "edge_server_service",
-    "edge_server_utilization",
-    "edge_weight_utilization",
-    "edge_E_avg_delay", "edge_E_avg_response",
-
-    # Cloud
-    "cloud_avg_wait","cloud_avg_delay",
-    "cloud_L","cloud_Lq",
-    "cloud_service_time_mean",
-    "cloud_avg_busy_servers",
-    "cloud_throughput",
-
-    # Coordinator
-    "coord_avg_wait","coord_avg_delay",
-    "coord_L","coord_Lq",
-    "coord_service_time_mean",
-    "coord_utilization",
-    "coord_throughput",
-
-    # dettagli scalabilità
-    "server_utilization_by_count"
-]
-
-header_coord_scalability = [
-    "seed","lambda","slot",
-
-    # Edge (repliche fisse derivate da CSV Edge)
-    "edge_server_number",
-    "edge_avg_wait","edge_avg_delay",
-    "edge_L","edge_Lq",
-    "edge_service_time_mean",
-    "edge_avg_busy_servers",
-    "edge_throughput",
-    "edge_E_avg_delay", "edge_E_avg_response",
-
-    # Cloud
-    "cloud_avg_wait","cloud_avg_delay",
-    "cloud_L","cloud_Lq",
-    "cloud_service_time_mean",
-    "cloud_avg_busy_servers",
-    "cloud_throughput",
-
-    # Coordinator (SCALABILE)
-    "coord_server_number",
-    "coord_avg_wait","coord_avg_delay",
-    "coord_L","coord_Lq",
-    "coord_service_time_mean",
-    "coord_utilization",
-    "coord_throughput",
-
-    # dettagli scalabilità
-    "server_utilization_by_count"
+    # legacy (se vuoi mantenerli)
+    "E_utilization","C_utilization",
 ]
 
 # === Header dedicato per la simulazione ad orizzonte infinito ===
@@ -143,32 +60,53 @@ infinite_header = [
     # tempi medi per nodo
     "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
     "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
-    "edge_E_avg_delay", "edge_E_avg_response",
-    # L, Lq
-    "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
+    "edge_E_avg_delay","edge_E_avg_response",
+    "edge_C_avg_delay","edge_C_avg_response",
+    # L, Lq (totali + per classe Edge)
+    "edge_L", "edge_Lq", "cloud_L", "cloud_Lq", "coord_L", "coord_Lq",
+    "edge_E_L", "edge_E_Lq", "edge_C_L", "edge_C_Lq",
     # utilizzazioni / busy servers
-    "edge_utilization","E_utilization","C_utilization","cloud_avg_busy_servers",
+    "edge_utilization", "coord_utilization", "cloud_avg_busy_servers",
+    "edge_E_utilization", "edge_C_utilization",
     # throughput
     "edge_throughput","cloud_throughput","coord_throughput",
     # tempi di servizio
-    "edge_service_time_mean","cloud_service_time_mean","coord_service_time_mean",
+    "edge_service_time_mean", "cloud_service_time_mean", "coord_service_time_mean",
+
     # conteggi per classi
-    "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C"
+    "count_E", "count_E_P1", "count_E_P2", "count_E_P3", "count_E_P4", "count_C",
+
+    # legacy (se li vuoi ancora)
+    "E_utilization", "C_utilization",
+
 ]
+
+
 HEADER_MERGED_SCALABILITY = [
     "seed","lambda","slot",
-    # Edge
-    "edge_server_number","edge_avg_wait","edge_avg_delay",
-    "edge_L","edge_Lq","edge_service_time_mean","edge_avg_busy_servers","edge_throughput",
-    "edge_E_avg_delay", "edge_E_avg_response",
+
+    # Edge (con per-classe)
+    "edge_server_number",
+    "edge_avg_wait","edge_avg_delay",
+    "edge_L","edge_Lq","edge_service_time_mean",
+    "edge_avg_busy_servers","edge_throughput",
+    "edge_utilization","edge_E_utilization","edge_C_utilization",
+    "edge_E_avg_delay","edge_E_avg_response",
+    "edge_C_avg_delay","edge_C_avg_response",
+    "edge_E_L","edge_E_Lq","edge_C_L","edge_C_Lq",
+
     # Cloud
-    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq","cloud_service_time_mean",
-    "cloud_avg_busy_servers","cloud_throughput",
+    "cloud_avg_wait","cloud_avg_delay","cloud_L","cloud_Lq",
+    "cloud_service_time_mean","cloud_avg_busy_servers","cloud_throughput",
+
     # Coordinator
-    "coord_server_number","coord_avg_wait","coord_avg_delay","coord_L","coord_Lq",
-    "coord_service_time_mean","coord_utilization","coord_throughput",
+    "coord_server_number","coord_avg_wait","coord_avg_delay",
+    "coord_L","coord_Lq","coord_service_time_mean",
+    "coord_utilization","coord_throughput",
+
     # Meta probabilità
     "pc","p1","p2","p3","p4",
+
     # Tracce serializzate
     "edge_scal_trace","coord_scal_trace"
 ]
@@ -236,45 +174,6 @@ def _label_for_sim(sim_type: str) -> str:
     }
     return mapping.get(sim_type, sim_type.replace(" ", "_").lower())
 
-
-def write_file_edge_scalability(results, file_name):
-    """
-    Scrive i risultati principali della simulazione edge scalability nel CSV.
-    Includendo il dizionario di utilizzo per server come JSON stringificato.
-    """
-    path = os.path.join(file_path, file_name)
-    os.makedirs(file_path, exist_ok=True)
-
-    results_serialized = results.copy()
-
-    # Converti il dizionario in stringa JSON compatta
-    if "server_utilization_by_count" in results_serialized:
-        results_serialized["server_utilization_by_count"] = json.dumps(
-            results_serialized["server_utilization_by_count"], separators=(',', ':')
-        )
-
-    # Rimuovi altri campi inutili dal dizionario
-    for key in ["scalability_trace", "edge_servers"]:
-        if key in results_serialized:
-            del results_serialized[key]
-
-    file_exists = os.path.isfile(path)
-
-    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header_edge_scalability)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(results_serialized)
-
-
-
-
-def clear_edge_scalability_file(file_name):
-    path = os.path.join(file_path, file_name)
-    os.makedirs(file_path, exist_ok=True)
-    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header_edge_scalability)
-        writer.writeheader()
 
 def write_scalability_trace(trace, seed, lam, slot):
     path = os.path.join(file_path, "edge_scalability_statistics.csv")
@@ -386,44 +285,6 @@ def build_summary_dict(stats, sim_type):
 
     return summary
 
-def save_summary_json(summary, sim_type, filename=None):
-    """
-    Salva il riepilogo in JSON ordinato in una cartella per tipo di analisi.
-    Esempio: output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250811_153045.json
-    """
-    label = _label_for_sim(sim_type)
-    out_dir = os.path.join(file_path, "summaries", label)
-    os.makedirs(out_dir, exist_ok=True)
-
-    if filename is None:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"summary_{label}_{ts}.json"
-    path = os.path.join(out_dir, filename)
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-    return path
-
-
-def save_summary_txt(summary, sim_type, filename=None):
-    """
-    (Opzionale) Salva un .txt simile alla stampa a schermo in una cartella per tipo di analisi.
-    Esempio: output/summaries/scalabilita_edge/summary_scalabilita_edge_20250811_153210.txt
-    """
-    label = _label_for_sim(sim_type)
-    out_dir = os.path.join(file_path, "summaries", label)
-    os.makedirs(out_dir, exist_ok=True)
-
-    if filename is None:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"summary_{label}_{ts}.txt"
-    path = os.path.join(out_dir, filename)
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(f"=== {summary['header']} ===\n")
-        for m in summary["metrics"]:
-            f.write(f"{m['name']}: {m['mean']:.6f} ± {m['ci_95']:.6f}\n")
-    return path
 
 def print_simulation_stats(stats, sim_type):
     # Costruisci il riepilogo per file JSON/TXT
@@ -464,12 +325,6 @@ def print_simulation_stats(stats, sim_type):
     _print_ci("Cloud - Throughput", getattr(stats, 'cloud_X', []))
     _print_ci("Coordinator - Throughput", getattr(stats, 'coord_X', []))
 
-    # salvataggio persistente
-    json_path = save_summary_json(summary, sim_type)
-    txt_path = save_summary_txt(summary, sim_type)  # se non vuoi il .txt, commenta questa riga
-
-    print(f"\n[Saved summaries] JSON: {json_path}  TXT: {txt_path}")
-
 
 def plot_analysis(wait_times, seeds, name, sim_type):
     """
@@ -504,108 +359,63 @@ def plot_analysis(wait_times, seeds, name, sim_type):
     plt.close()
 
 
-def plot_multi_lambda_per_seed(wait_times, seeds, name, sim_type, lambdas, slots):
+
+def plot_multi_seed_per_lambda(
+    wait_times, seeds, name, sim_type, lambdas, slots,
+    edge_E_wait_times=None, edge_C_wait_times=None
+):
     """
-    Genera un grafico per seed confrontando più λ,
-    salvando in una cartella per tipo di analisi.
-    Esempio: output/plot/multi_lambda/orizzonte_finito/<name>_seed<seed>.png
-    """
-    label = _label_for_sim(sim_type)
-    output_dir = os.path.join(file_path, "plot", "multi_lambda", label)
-    os.makedirs(output_dir, exist_ok=True)
+    Genera un grafico per λ confrontando seed diversi.
+    Cartella: output/plot/multi_seed/<label>/
+    File:     <name>_lambda<lam>.png
 
-    # Raggruppo per seed
-    seed_to_runs = {}
-    for idx, seed in enumerate(seeds):
-        if not wait_times[idx]:
-            continue
-        seed_to_runs.setdefault(seed, []).append((slots[idx], lambdas[idx], wait_times[idx]))
-
-    # Creo un grafico per ogni seed
-    for seed, runs in seed_to_runs.items():
-        plt.figure(figsize=(10, 6))
-        for slot, lam, response_times in runs:
-            times = [pt[0] for pt in response_times]
-            avg_response_times = [pt[1] for pt in response_times]
-            plt.plot(times, avg_response_times, label=f"Slot {slot} (λ={lam:.4f})")
-
-        plt.xlabel("Time (s)")
-        plt.ylabel("Average wait time (s)")
-        plt.title(f"Multi-λ Analysis - {name} | Seed {seed}")
-        plt.grid(True)
-
-        output_path = os.path.join(output_dir, f"{name}_seed{seed}.png")
-        plt.savefig(output_path)
-        plt.close()
-
-
-def plot_multi_seed_per_lambda(wait_times, seeds, name, sim_type, lambdas, slots):
-    """
-    Genera un grafico per λ confrontando seed diversi,
-    salvando in una cartella per tipo di analisi.
-    Esempio: output/plot/multi_seed/orizzonte_finito/<name>_lambda0.2000.png
+    Se 'name' è dell'EDGE e vengono passate anche le serie per classe,
+    dopo il grafico globale crea automaticamente:
+      - <name>_class_E_lambda<lam>.png  (tempo di risposta pacchetti E all'Edge)
+      - <name>_class_C_lambda<lam>.png  (tempo di risposta pacchetti C all'Edge)
     """
     label = _label_for_sim(sim_type)
     output_dir = os.path.join(file_path, "plot", "multi_seed", label)
     os.makedirs(output_dir, exist_ok=True)
 
-    # Raggruppo per λ
-    lambda_to_runs = {}
-    for idx, lam in enumerate(lambdas):
-        if not wait_times[idx]:
-            continue
-        lambda_to_runs.setdefault(lam, []).append((seeds[idx], slots[idx], wait_times[idx]))
+    def _plot_one(series_list, file_suffix="", title_suffix="", ylabel_override=None):
+        # Raggruppo per λ
+        lambda_to_runs = {}
+        for idx, lam in enumerate(lambdas):
+            if not series_list[idx]:
+                continue
+            lambda_to_runs.setdefault(lam, []).append((seeds[idx], slots[idx], series_list[idx]))
 
-    # Creo un grafico per ogni λ
-    for lam, runs in lambda_to_runs.items():
-        plt.figure(figsize=(10, 6))
-        for seed, slot, response_times in runs:
-            times = [pt[0] for pt in response_times]
-            avg_response_times = [pt[1] for pt in response_times]
-            plt.plot(times, avg_response_times, label=f"Seed {seed} (Slot {slot})")
+        # Creo un grafico per ogni λ
+        for lam, runs in lambda_to_runs.items():
+            plt.figure(figsize=(10, 6))
+            for seed, slot, response_times in runs:
+                times = [pt[0] for pt in response_times]
+                values = [pt[1] for pt in response_times]
+                plt.plot(times, values, label=f"Seed {seed} (Slot {slot})")
 
-        plt.xlabel("Time (s)")
-        plt.ylabel("Average wait time (s)")
-        plt.title(f"Multi-seed Analysis - {name} | λ={lam:.4f}")
-        plt.grid(True)
+            plt.xlabel("Time (s)")
+            plt.ylabel(ylabel_override if ylabel_override else "Average wait time (s)")
+            plt.title(f"Multi-seed Analysis - {name}{title_suffix} | λ={lam:.4f}")
+            plt.grid(True)
+            # (lasciamo senza legend come nella funzione originale)
 
-        output_path = os.path.join(output_dir, f"{name}_lambda{lam:.4f}.png")
-        plt.savefig(output_path)
-        plt.close()
+            out = os.path.join(output_dir, f"{name}{file_suffix}_lambda{lam:.4f}.png")
+            plt.savefig(out)
+            plt.close()
 
+    # 1) Grafico EDGE/CLOUD/COORD "globale" (comportamento originale)
+    _plot_one(wait_times)
 
-def write_file_coord_scalability(results, file_name):
-    """Scrive i risultati della simulazione Coordinator Scalability nel CSV."""
-    path = os.path.join(file_path, file_name)
-    os.makedirs(file_path, exist_ok=True)
-
-    # Copia e serializza i campi complessi
-    results_serialized = results.copy()
-
-    # serializza il dict di utilizzi
-    if "server_utilization_by_count" in results_serialized:
-        results_serialized["server_utilization_by_count"] = json.dumps(
-            results_serialized["server_utilization_by_count"], separators=(',', ':')
-        )
-
-    # ⚠️ rimuovi chiavi non presenti nell'header (come 'scalability_trace')
-    allowed = set(header_coord_scalability)
-    results_serialized = {k: v for k, v in results_serialized.items() if k in allowed}
-
-    file_exists = os.path.isfile(path)
-    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header_coord_scalability)
-        if not file_exists:
-            writer.writeheader()
-        writer.writerow(results_serialized)
+    # 2) Se è l’EDGE e ho le serie per classe, produco anche E e C
+    is_edge = name.lower().startswith("edge")
+    if is_edge and (edge_E_wait_times is not None) and (edge_C_wait_times is not None):
+        _plot_one(edge_E_wait_times, file_suffix="_class_E", title_suffix=" [Class E]",
+                  ylabel_override="Average response time (s)")
+        _plot_one(edge_C_wait_times, file_suffix="_class_C", title_suffix=" [Class C]",
+                  ylabel_override="Average response time (s)")
 
 
-def clear_coord_scalability_file(file_name):
-    path = os.path.join(file_path, file_name)
-    os.makedirs(file_path, exist_ok=True)
-    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header_coord_scalability)
-        writer.writeheader()
 
 
 # ---------------------------- PLOT FOR INFINITE SIMULATIONS -------------------------------
