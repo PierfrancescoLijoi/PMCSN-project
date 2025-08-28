@@ -20,7 +20,10 @@ from libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_rand
 plantSeeds(cs.SEED)
 
 # --- Parametri del modello locale a questo file ---
-EDGE_M = 1
+EDGE_M = cs.EDGE_SERVERS
+
+def _update_cloud_next_completion_improved(stats):
+    stats.t.completion_cloud = (min(stats.cloud_comp) if stats.cloud_comp else cs.INFINITY)
 
 
 def _ensure_runtime_structs_improved(stats):
@@ -39,6 +42,12 @@ def _ensure_runtime_structs_improved(stats):
         stats.edge_busy = [False] * stats.edge_m
     if not hasattr(stats, 'edge_jobtype'):
         stats.edge_jobtype = [None] * stats.edge_m  # "E" nell'attuale modello
+
+    # Cloud ∞-server: lista completamenti
+    if not hasattr(stats, 'cloud_comp'):
+        stats.cloud_comp = []  # lista di tempi di completamento
+    if not hasattr(stats.t, 'completion_cloud'):
+        stats.t.completion_cloud = cs.INFINITY
 
     # Feedback queue (post-Cloud)
     if not hasattr(stats, 'queue_feedback'):
@@ -97,6 +106,7 @@ def _edge_complete_one_improved(stats):
     Ritorna True se un server è stato gestito, False altrimenti.
     """
     tnow = stats.t.current
+
     # Individua il/i server che hanno completato in questo istante
     cand = [i for i, tc in enumerate(stats.edge_comp) if tc == tnow]
     if not cand:
@@ -114,33 +124,49 @@ def _edge_complete_one_improved(stats):
     stats.index_edge += 1
     stats.number_edge -= 1
 
-    # Routing post-Edge (come in modello attuale):
+    # Routing post-Edge
     if job_type == "E":
         selectStream(3)
         stats.number_E -= 1
-        rand_val = rng_random()  # numero casuale per la classificazione globale
+        r = rng_random()  # numero casuale per la classificazione globale
 
-        if rand_val < cs.P_C:
-            # Va al Cloud
+        if r < cs.P_C:
+            # --- CLOUD ∞-SERVER: ogni arrivo avvia il proprio servizio indipendente ---
             stats.number_cloud += 1
-            if stats.number_cloud == 1:
-                service = GetServiceCloud()
-                stats.t.completion_cloud = stats.t.current + service
-                stats.area_cloud.service += service
-                stats.area_C.service += service
+            service = GetServiceCloud()
+            stats.area_cloud.service += service
+            stats.area_C.service     += service
+
+            # assicurati che esista la lista dei completamenti Cloud
+            if not hasattr(stats, 'cloud_comp'):
+                stats.cloud_comp = []
+            stats.cloud_comp.append(stats.t.current + service)
+
+            # aggiorna il prossimo completamento Cloud al minimo della lista
+            _update_cloud_next_completion_improved(stats)
+
         else:
             # Va al Coordinator Server Edge (P1..P4)
             stats.number_coord += 1
-            coord_rand = (rand_val - cs.P_C) / (1 - cs.P_C)
-            if coord_rand < cs.P1_PROB:
+            # Dopo aver deciso che va al Coordinator:
+            # Dopo aver deciso che va al Coordinator:
+            coord_rand = (r - cs.P_C) / (1.0 - cs.P_C)  # ∈ [0,1] condizionato
+
+            # Soglie condizionate: normalizza dividendo per P_COORD
+            t1 = cs.P1_PROB
+            t2 = (cs.P1_PROB + cs.P2_PROB)
+            t3 = (cs.P1_PROB + cs.P2_PROB + cs.P3_PROB)
+
+            if coord_rand < t1:
                 stats.queue_coord_low.append("P1")
-            elif coord_rand < cs.P1_PROB + cs.P2_PROB:
+            elif coord_rand < t2:
                 stats.queue_coord_low.append("P2")
-            elif coord_rand < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:
+            elif coord_rand < t3:
                 stats.queue_coord_high.append("P3")
             else:
                 stats.queue_coord_high.append("P4")
 
+            # se il Coordinator era idle, avvia subito un servizio
             if stats.number_coord == 1:
                 if stats.queue_coord_high:
                     service = GetServiceCoordP3P4()
@@ -149,8 +175,8 @@ def _edge_complete_one_improved(stats):
                 stats.t.completion_coord = stats.t.current + service
                 stats.area_coord.service += service
 
-    # (Se ci fossero "C", qui potremmo aggiornare count_C, ma nel nuovo modello non vengono più serviti)
-    _edge_try_start_service_improved(stats)  # prova ad assegnare un nuovo job al server liberato
+    # Prova ad assegnare un nuovo job al server Edge appena liberato
+    _edge_try_start_service_improved(stats)
     _update_edge_next_completion_improved(stats)
     return True
 
@@ -178,7 +204,9 @@ def finite_simulation_improved(stop, forced_lambda=None):
         execute_improved(stats, stop, forced_lambda)
 
     stats.calculate_area_queue()
-    return return_stats_improved(stats, stats.t.current, seed), stats
+
+    T = max(1e-12, stats.t.current - cs.START)
+    return return_stats_improved(stats, T, seed), stats
 
 
 def infinite_simulation_improved(forced_lambda=None):
@@ -312,22 +340,26 @@ def execute_improved(stats, stop, forced_lambda=None):
 
     # 3) Completamento Cloud → (NUOVO) va nella coda feedback (single server)
     elif stats.t.current == stats.t.completion_cloud:
+        # Completa ESATTAMENTE un job: rimuovi il min dalla lista
         stats.index_cloud += 1
         stats.number_cloud -= 1
+        # rimuovi l'istanza che ha completato (il min corrente)
+        try:
+            stats.cloud_comp.remove(stats.t.current)
+        except ValueError:
+            # (se min==current per floating point, fai una rimozione tollerante)
+            # rimuovi la più vicina
+            if stats.cloud_comp:
+                m = min(stats.cloud_comp, key=lambda x: abs(x - stats.t.current))
+                stats.cloud_comp.remove(m)
+        # nessun "nuovo avvio": gli altri sono già in servizio
+        _update_cloud_next_completion_improved(stats)
 
-        if stats.number_cloud > 0:
-            service = GetServiceCloud()
-            stats.t.completion_cloud = stats.t.current + service
-            stats.area_cloud.service += service
-        else:
-            stats.t.completion_cloud = cs.INFINITY
-
-        # Routing modificato: niente ritorno all'Edge come "C"
-        # Entra nella coda feedback (single server FIFO)
+        # Ora il job va al FEEDBACK (come già fai)
         stats.number_feedback += 1
         stats.queue_feedback.append("FB")
         if stats.number_feedback == 1:
-            service = GetServiceFeedback_improved()  # nuovo generatore (locale a questo file)
+            service = GetServiceFeedback_improved()
             stats.t.completion_feedback = stats.t.current + service
             stats.area_feedback.service += service
             # (Non tracciamo metriche dedicate della coda feedback)
@@ -368,7 +400,7 @@ def execute_improved(stats, stop, forced_lambda=None):
         if stats.queue_feedback:
             stats.queue_feedback.pop(0)
         stats.number_feedback -= 1
-        stats.index_feedback += 1  # 🔴 AGGIUNGERE QUESTA RIGA
+        stats.index_feedback += 1
 
         if stats.number_feedback > 0:
             service = GetServiceFeedback_improved()
@@ -408,8 +440,8 @@ def return_stats_improved(stats, t, seed):
     FB_Ls = (stats.area_feedback.service / t) if t > 0 else 0.0
 
     # --- Utilizzazioni / busy ---
-    m_edge  = getattr(stats, 'edge_m', 1)
-    ENA_rho = (stats.area_edge.service  / (t * m_edge)) if t > 0 else 0.0
+
+    ENA_rho = (stats.area_edge.service  / (t)) if t > 0 else 0.0
     CO_rho  = (stats.area_coord.service / t)            if t > 0 else 0.0
     C_busy  = (stats.area_cloud.service / t)            if t > 0 else 0.0
 

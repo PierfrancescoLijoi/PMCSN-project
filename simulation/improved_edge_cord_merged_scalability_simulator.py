@@ -29,6 +29,10 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
     stats = SimulationStats_improved()
     stats.reset(cs.START)
     stats.t.arrival = GetArrival(stats.t.current, forced_lambda)
+    # --- Cloud ∞-server (lista dei tempi di completamento) ---
+    stats.cloud_comp = []
+    stats.t.completion_cloud = cs.INFINITY
+
 
     # --- Stato feedback (post-Cloud) ---
     stats.queue_feedback = []
@@ -120,6 +124,9 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
         if stats.number_coord > 0: stats.area_coord.node += delta * stats.number_coord
         if stats.number_E     > 0: stats.area_E.node     += delta * stats.number_E
 
+        if stats.number_feedback > 0:
+            stats.area_feedback.node += delta * stats.number_feedback
+
         stats.t.current = stats.t.next
 
         # ---------- SCALING EDGE: per-core, min=2, max=EDGE_SERVERS_MAX ----------
@@ -197,13 +204,17 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
                 selectStream(3)
                 r = rng_random()
                 if r < cs.P_C:
-                    # → Cloud
+
+                    # → Cloud (∞-server): avvia SEMPRE un servizio indipendente
                     stats.number_cloud += 1
-                    if stats.number_cloud == 1:
-                        service = GetServiceCloud()
-                        stats.t.completion_cloud = stats.t.current + service
-                        stats.area_cloud.service += service
-                        stats.area_C.service     += service
+                    service = GetServiceCloud()
+                    stats.area_cloud.service += service
+                    stats.area_C.service += service
+
+                    # programma il completamento di QUESTO job
+                    stats.cloud_comp.append(stats.t.current + service)
+                    stats.t.completion_cloud = (min(stats.cloud_comp) if stats.cloud_comp else cs.INFINITY)
+
                 else:
                     # → Coordinator (P1..P4), priorità P3/P4
                     stats.number_coord += 1
@@ -221,25 +232,30 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
                 edge_assign_if_possible(i)
                 break
 
-        # Completamento Cloud → FEEDBACK (non torna all'Edge)
+        # Completamento Cloud → FEEDBACK (∞-server: rimuovi l'istanza completata)
         if stats.t.current == stats.t.completion_cloud:
             stats.index_cloud += 1
             stats.number_cloud -= 1
-            if stats.number_cloud > 0:
-                service = GetServiceCloud()
-                stats.t.completion_cloud = stats.t.current + service
-                stats.area_cloud.service += service
-                stats.area_C.service     += service
-            else:
-                stats.t.completion_cloud = cs.INFINITY
 
-            # → coda feedback
+            # rimuovi il completamento corrente dalla lista (tollerante al floating point)
+            try:
+                stats.cloud_comp.remove(stats.t.current)
+            except ValueError:
+                if stats.cloud_comp:
+                    # rimuovi l'elemento più vicino a t.current
+                    m = min(stats.cloud_comp, key=lambda x: abs(x - stats.t.current))
+                    stats.cloud_comp.remove(m)
+
+            # aggiorna il prossimo completamento Cloud
+            stats.t.completion_cloud = (min(stats.cloud_comp) if stats.cloud_comp else cs.INFINITY)
+
+            # → coda feedback (come prima)
             stats.number_feedback += 1
             stats.queue_feedback.append("FB")
             if stats.number_feedback == 1:
                 service = GetServiceFeedback_improved()
                 stats.t.completion_feedback = stats.t.current + service
-                stats.area_feedback.service += service  # NEW: traccia servizio FB
+                stats.area_feedback.service += service
 
         # Completamento Coordinator
         for j in range(cs.COORD_EDGE_SERVERS):

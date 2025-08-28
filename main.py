@@ -660,8 +660,9 @@ def summarize_by_lambda(input_csv: str,
                         exclude_cols=None,
                         output_dir: str | None = None) -> str:
     """
-    Crea un report di medie ± CI(95%) raggruppate per λ, usando solo
-    le colonne numeriche effettivamente presenti nel CSV.
+    Crea un report di medie ± CI(95%) raggruppate per λ.
+    Se è presente la colonna 'pc', il report è suddiviso per 'pc' e,
+    all'interno di ciascun pc, raggruppato per λ.
 
     Parametri:
       - input_csv    : percorso al CSV di input.
@@ -711,14 +712,6 @@ def summarize_by_lambda(input_csv: str,
     if not metric_cols:
         raise ValueError(f"No numeric metric columns found in {input_csv}")
 
-    grouped = df.groupby('lambda', dropna=True)
-
-    lines = []
-    title = f"Summary by λ — {os.path.basename(input_csv)}"
-    lines.append(f"=== {title} ===")
-    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("Note: mean ± 95% CI (z=1.96), aggregated over all rows for each λ.\n")
-
     def bucket_key(col: str):
         # Ordina per famiglie, se presenti; altrimenti cade in (5, col)
         if col.startswith('edge_NuoviArrivi_'): return (0, col)
@@ -728,14 +721,48 @@ def summarize_by_lambda(input_csv: str,
         if col.startswith('edge_'):             return (4, col)
         return (5, col)
 
-    for lam, g in grouped:
-        lines.append(f"--- λ = {lam:.6f}  (rows={len(g)}) ---")
-        for col in sorted(metric_cols, key=bucket_key):
-            mean, margin, n = _mean_ci_95(pd.to_numeric(g[col], errors='coerce'))
-            if mean is None:
-                continue
-            lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
-        lines.append("")
+    # helper: emette un blocco per un dataframe già filtrato (df_or_sub)
+    def emit_block(df_or_sub, title_prefix: str):
+        lines = []
+        grouped = df_or_sub.groupby('lambda', dropna=True)
+        for lam, g in grouped:
+            # lam potrebbe non essere float in alcuni CSV: gestiamo entrambi i casi
+            try:
+                lam_str = f"{float(lam):.6f}"
+            except Exception:
+                lam_str = str(lam)
+            lines.append(f"{title_prefix}λ = {lam_str}  (rows={len(g)}) ---")
+            for col in sorted(metric_cols, key=bucket_key):
+                mean, margin, n = _mean_ci_95(pd.to_numeric(g[col], errors='coerce'))
+                if mean is None:
+                    continue
+                lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+            lines.append("")  # riga vuota tra blocchi
+        return lines
+
+    lines = []
+    base_title = f"Summary by λ — {os.path.basename(input_csv)}"
+    lines.append(f"=== {base_title} ===")
+    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    lines.append("Note: mean ± 95% CI (z=1.96), aggregated over all rows for each λ.\n")
+
+    has_pc = 'pc' in df.columns
+    if has_pc:
+        # ordiniamo i pc per presentazione stabile
+        pc_values = list(pd.Series(df['pc']).dropna().unique())
+        try:
+            # prova a ordinare numericamente se possibile
+            pc_values = sorted(pc_values, key=lambda x: float(x))
+        except Exception:
+            pc_values = sorted(pc_values, key=lambda x: str(x))
+
+        for pc_val in pc_values:
+            sub = df[df['pc'] == pc_val]
+            lines.append(f"== PC = {pc_val} ==")
+            lines.extend(emit_block(sub, title_prefix="--- "))
+    else:
+        # comportamento originale: unico blocco per tutto il dataset, raggruppato per λ
+        lines.extend(emit_block(df, title_prefix="--- "))
 
     # risoluzione percorso output
     base_dir = output_dir if output_dir is not None else os.path.dirname(input_csv)
@@ -758,6 +785,7 @@ def summarize_by_lambda(input_csv: str,
     return output_txt
 
 
+
 def _fmt_hms(seconds: float) -> str:
     return str(timedelta(seconds=int(seconds)))
 
@@ -770,7 +798,7 @@ if __name__ == "__main__":
     print(f"\n▶ START: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     print_csv_legend()
-
+    """
     # ===================== STANDARD =====================
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
     t_std = time.perf_counter()
@@ -794,6 +822,7 @@ if __name__ == "__main__":
     dt_std = time.perf_counter() - t_std
     print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
     print("FINE---- STANDARD MODEL SIMULTIONS.\n")
+    """
 
     # ===================== IMPROVED =====================
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")

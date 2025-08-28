@@ -18,6 +18,9 @@ from utils import constants as cs
 from utils.sim_utils import calculate_confidence_interval
 from datetime import datetime
 import json
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
 # Directory di output
 file_path_improved = "output_improved/"
 
@@ -497,15 +500,7 @@ def clear_coord_scalability_file_improved(file_name):
 
 # ---------------------------- PLOT FOR INFINITE SIMULATIONS -------------------------------
 def plot_infinite_analysis_improved():
-    """
-    Grafici per l'analisi a orizzonte infinito:
-    - Nodi (Edge/Cloud/Coordinator): x = batch, linee per ciascun λ reale
-    - Curva Edge response time vs λ con punti per slot e linea QoS = 3s
-    Salva tutto in output/plot/orizzonte infinito
-    """
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from pathlib import Path
+
 
     out_dir = Path(file_path_improved)
     csv_path = out_dir / "infinite_statistics.csv"
@@ -552,7 +547,9 @@ def plot_infinite_analysis_improved():
         plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
         plt.close()
 
-
+    plot_node_by_lambda("edge_NuoviArrivi_avg_wait",
+                        "Nodo Edge: tempo di risposta per batch (linee per λ)",
+                        "infinite_edge_response_vs_batch_per_lambda.png")
     plot_node_by_lambda("cloud_avg_wait",
                         "Nodo Cloud: tempo di risposta per batch (linee per λ)",
                         "infinite_cloud_response_vs_batch_per_lambda.png")
@@ -574,27 +571,28 @@ def plot_infinite_analysis_improved():
     plt.figure()
     # Curva media globale (λ -> W_edge)
     if not agg_lambda_global.empty:
-        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_NuoviArrivi_avg_wait"], marker="o", color="blue")
+        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_NuoviArrivi_avg_wait"],
+                 marker="o", color="blue")
     # Punti per slot
     for slot, g in agg_lambda_slot.groupby("slot"):
         if not g.empty:
             plt.scatter(g["lambda"], g["edge_NuoviArrivi_avg_wait"], label=f"Slot {slot}")
             for _, r in g.iterrows():
-                plt.annotate(f"{r['lambda']:.5f}", (r["lambda"], r["edge_NuoviArrivi_avg_wait"]),
+                plt.annotate(f"{r['lambda']:.5f}",
+                             (r["lambda"], r["edge_NuoviArrivi_avg_wait"]),
                              textcoords="offset points", xytext=(0, 6),
                              ha="center", fontsize=8)
     # Linea QoS
     plt.axhline(y=qos_seconds, linestyle="--", color="r", linewidth=1.2,
                 label=f"QoS = {qos_seconds:.0f}s")
     plt.xlabel("λ (arrivi/secondo)")
-    plt.ylabel("Tempo medio di risposta Edge_NuoviArrivi (s)")
-    plt.title("Tempo di risposta Edge_NuoviArrivi vs λ (con QoS = 3s)")
+    plt.ylabel("Tempo medio di risposta Edge (s)")
+    plt.title("Tempo di risposta Edge rispetto a λ (con QoS = 3s)")
     plt.legend()
     plt.grid(True)
     plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
                 dpi=150, bbox_inches="tight")
     plt.close()
-
 
 
 def plot_edge_response_vs_pc(csv_path: str,

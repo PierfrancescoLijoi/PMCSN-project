@@ -83,6 +83,7 @@ class SimulationStats_improved:
         self.number_feedback = 0
         self.area_feedback = Track()
         self.queue_feedback = []
+        self.cloud_comp = []
 
     def reset_infinite(self):
         """
@@ -95,6 +96,7 @@ class SimulationStats_improved:
         self.index_edge = 0
         self.index_cloud = 0
         self.index_coord = 0
+        self.cloud_comp = []
 
         self.count_E = 0
         self.count_C = 0
