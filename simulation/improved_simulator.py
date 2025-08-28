@@ -20,7 +20,7 @@ from libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_rand
 plantSeeds(cs.SEED)
 
 # --- Parametri del modello locale a questo file ---
-EDGE_M = 1  # dual-core fisso per il modello base
+EDGE_M = 1
 
 
 def _ensure_runtime_structs_improved(stats):
@@ -403,6 +403,10 @@ def return_stats_improved(stats, t, seed):
     CO_L    = (stats.area_coord.node  / t) if t > 0 else 0.0
     CO_Lq   = (stats.area_coord.queue / t) if t > 0 else 0.0
 
+    # --- Numero medio "nel servente" (Ls) = tempo totale di servizio / orizzonte ---
+    ENA_Ls = (stats.area_edge.service / t) if t > 0 else 0.0
+    FB_Ls = (stats.area_feedback.service / t) if t > 0 else 0.0
+
     # --- Utilizzazioni / busy ---
     m_edge  = getattr(stats, 'edge_m', 1)
     ENA_rho = (stats.area_edge.service  / (t * m_edge)) if t > 0 else 0.0
@@ -437,6 +441,7 @@ def return_stats_improved(stats, t, seed):
         'edge_NuoviArrivi_avg_delay':           ENA_Wq,
         'edge_NuoviArrivi_L':                   ENA_L,
         'edge_NuoviArrivi_Lq':                  ENA_Lq,
+        "edge_NuoviArrivi_Ls":                  ENA_Ls,  # << NEW
         'edge_NuoviArrivi_utilization':         ENA_rho,
         'edge_NuoviArrivi_throughput':          ENA_X,
         'edge_NuoviArrivi_service_time_mean':   ENA_s,
@@ -447,6 +452,7 @@ def return_stats_improved(stats, t, seed):
         'edge_Feedback_avg_delay':              FB_Wq,
         'edge_Feedback_L':                      FB_L,
         'edge_Feedback_Lq':                     FB_Lq,
+        "edge_Feedback_Ls":                     FB_Ls,  # << NEW
         'edge_Feedback_utilization':            FB_rho,
         'edge_Feedback_throughput':             FB_X,
         'edge_Feedback_service_time_mean':      FB_s,

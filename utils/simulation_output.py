@@ -521,3 +521,98 @@ def plot_infinite_analysis():
     plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
                 dpi=150, bbox_inches="tight")
     plt.close()
+
+
+def plot_edge_response_vs_pc(csv_path: str,
+                             out_path: str | None = None,
+                             response_col: str | None = None,
+                             qos_threshold: float = 3.0) -> str:
+    """
+    Grafica il TEMPO DI RISPOSTA dei pacchetti E nel nodo Edge vs p_c,
+    tracciando UNA linea per ciascun λ. Usa direttamente la colonna 'edge_avg_wait_E'
+    già presente nel CSV (nessuna composizione).
+
+    Parametri:
+      - csv_path      : percorso del CSV (es. "output_improved/merged_scalability_statistics.csv").
+      - out_path      : (opz.) percorso PNG di output; se None -> <dir csv>/plot/edge_E_response_vs_pc.png
+      - response_col  : (opz.) forza un nome colonna; default autodetect 'edge_avg_wait_E'
+                        (fallback: 'edge_E_avg_response' se presente).
+      - qos_threshold : (opz.) soglia QoS in secondi per la linea orizzontale (default 3.0).
+
+    Ritorna: percorso del file PNG generato.
+    """
+    import os
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        raise ValueError(f"Nessun dato in {csv_path}")
+
+    # Normalizza nomi colonna
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Individua la colonna del tempo di risposta dei pacchetti E @ Edge
+    resp = response_col
+    if resp is None:
+        if "edge_NuoviArrivi_avg_wait" in df.columns:
+            resp = "edge_NuoviArrivi_avg_wait"
+        elif "edge_avg_wait_E" in df.columns:
+            resp = "edge_avg_wait_E"
+        elif "edge_E_avg_response" in df.columns:
+            resp = "edge_E_avg_response"
+        else:
+            raise ValueError('Colonna non trovata: attesa \'edge_avg_wait_E\' , \'edge_NuoviArrivi_avg_wait\' (o \'edge_E_avg_response\').')
+
+    # Colonne richieste
+    required = {"pc", "lambda", resp}
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Mancano colonne nel CSV: {missing}")
+
+    # Cast numerico e drop NA
+    for col in ["pc", "lambda", resp]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["pc", "lambda", resp])
+    if df.empty:
+        raise ValueError("Dati insufficienti dopo la pulizia per 'pc', 'lambda' e risposta E.")
+
+    # Media per (lambda, pc) se più righe/repliche
+    agg = (
+        df.groupby(["lambda", "pc"], as_index=False)[resp]
+          .mean()
+          .rename(columns={resp: "response_E"})
+          .sort_values(["lambda", "pc"])
+    )
+
+    # Output path
+    if out_path is None:
+        base_dir = os.path.dirname(os.path.abspath(csv_path))
+        out_dir = os.path.join(base_dir, "plot")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, "edge_E_response_vs_pc.png")
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+
+    # Plot: una linea per ciascun λ
+    plt.figure()
+    for lam, g in agg.groupby("lambda"):
+        plt.plot(g["pc"], g["response_E"], label=f"λ={lam}")
+
+    # Linea QoS a 3s (parametrizzabile)
+    if qos_threshold is not None:
+        plt.axhline(y=qos_threshold, linestyle="--", label=f"QoS = {qos_threshold}s")
+
+    plt.xlabel("p_c")
+    plt.ylabel("Tempo di risposta E @ Edge [s]")
+    plt.title("Edge (pacchetti E): tempo di risposta vs p_c — una linea per λ")
+    plt.legend(title="Legenda")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+
+    print(f"[plot_edge_response_vs_pc] Grafico salvato in: {out_path}")
+    return out_path

@@ -20,7 +20,7 @@ REPLICATIONS = 100
 
 FEEDBACK_SERVICE = 0.1  # 0.1 classe C
 # -------------------------
-EDGE_SERVICE_E_im = 0.42  # 0.5 * 2
+EDGE_SERVICE_E_im = 0.42
 EDGE_M = 1  # M/M/1 per il nodo Edge
 
 # -------------------------

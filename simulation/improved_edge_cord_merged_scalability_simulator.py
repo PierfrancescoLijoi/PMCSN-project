@@ -302,6 +302,10 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
     # NEW: Edge utilization normalizzata per #core attivi (m = cs.EDGE_SERVERS)
     edge_util_norm = (stats.area_edge.service / (T * max(1, cs.EDGE_SERVERS)))
 
+    # --- NEW: numero medio "nel servente" (Ls) ---
+    ENA_Ls = (stats.area_edge.service / T) if T > 0 else 0.0  # Edge_NuoviArrivi (solo E)
+    FB_Ls = (stats.area_feedback.service / T) if T > 0 else 0.0  # Edge_Feedback (solo C)
+
     results = {
         'seed': seed,
         'lambda': forced_lambda,
@@ -313,6 +317,7 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
         'edge_NuoviArrivi_avg_delay': edge_Wq,
         'edge_NuoviArrivi_L': stats.area_edge.node / T,
         'edge_NuoviArrivi_Lq': stats.area_edge.queue / T,
+        'edge_NuoviArrivi_Ls': ENA_Ls,  # << NEW (qui)
         'edge_NuoviArrivi_service_time_mean': (
                     stats.area_edge.service / stats.index_edge) if stats.index_edge > 0 else 0.0,
         'edge_NuoviArrivi_utilization': (stats.area_edge.service / (T * max(1, cs.EDGE_SERVERS))),
@@ -326,6 +331,7 @@ def edge_coord_scalability_simulation_improved(stop, forced_lambda=None, slot_in
             stats, 'index_feedback', 0) > 0 else 0.0,
         'edge_Feedback_L': stats.area_feedback.node / T,
         'edge_Feedback_Lq': stats.area_feedback.queue / T,
+        'edge_Feedback_Ls': FB_Ls,
         'edge_Feedback_service_time_mean': (
                     stats.area_feedback.service / max(1, getattr(stats, 'index_feedback', 0))) if getattr(stats,
                                                                                                           'index_feedback',

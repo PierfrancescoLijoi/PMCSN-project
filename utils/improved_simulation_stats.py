@@ -180,3 +180,6 @@ class ReplicationStats_improved:
         self.edge_wait_interval = []
         self.cloud_wait_interval = []
         self.coord_wait_interval = []
+
+        self.edge_Ls = []
+        self.feedback_Ls = []

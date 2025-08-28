@@ -326,6 +326,14 @@ def append_stats_improved(replicationStats, results, stats):
     replicationStats.coord_L.append(results['coord_L'])
     replicationStats.coord_Lq.append(results['coord_Lq'])
 
+    # --- Ls (numero medio in servizio) ---              # << NEW BLOCK
+    if not hasattr(replicationStats, 'edge_Ls'):
+        replicationStats.edge_Ls = []
+    if not hasattr(replicationStats, 'feedback_Ls'):
+        replicationStats.feedback_Ls = []
+    replicationStats.edge_Ls.append(results.get('edge_NuoviArrivi_Ls', 0.0))
+    replicationStats.feedback_Ls.append(results.get('edge_Feedback_Ls', 0.0))
+
     # --- Utilizzazioni / busy (usa Edge_NuoviArrivi come 'edge') ---
     replicationStats.edge_utilization.append(results['edge_NuoviArrivi_utilization'])
     replicationStats.coord_utilization.append(results['coord_utilization'])
@@ -335,6 +343,8 @@ def append_stats_improved(replicationStats, results, stats):
     replicationStats.edge_X.append(results['edge_NuoviArrivi_throughput'])
     replicationStats.cloud_X.append(results['cloud_throughput'])
     replicationStats.coord_X.append(results['coord_throughput'])
+
+
 
     # --- Serie transiente (già pronte nello stats runtime) ---
     replicationStats.edge_wait_interval.append(stats.edge_wait_times)

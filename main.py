@@ -11,20 +11,22 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 import os
 import pandas as pd
 import utils.constants as cs
+import time
 
-from datetime import datetime
+from datetime import datetime, timedelta
 from matplotlib import pyplot as plt
 from simulation.edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_multi_seed_per_lambda, \
-    write_infinite_row, write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file
+    write_infinite_row, write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
+    plot_infinite_analysis, plot_edge_response_vs_pc
 from utils.simulation_stats import ReplicationStats
 from simulation.improved_edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation_improved
 from simulation.improved_simulator import finite_simulation_improved, infinite_simulation_improved
 from utils.improved_simulation_output import write_file_improved, clear_file_improved, print_simulation_stats_improved, \
-    plot_multi_lambda_per_seed_improved, plot_multi_seed_per_lambda_improved, \
+    plot_multi_seed_per_lambda_improved, \
     write_infinite_row_improved, write_file_merged_scalability_improved, clear_merged_scalability_file_improved, \
-    clear_infinite_file_improved
+    clear_infinite_file_improved, plot_infinite_analysis_improved
 from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, append_stats_improved
 from utils.improved_simulation_stats import ReplicationStats_improved
 from libraries.rngs import plantSeeds, getSeed
@@ -122,6 +124,9 @@ def start_infinite_lambda_scan_simulation():
             append_stats(replicationStats, results, batch_stats)
 
     print_simulation_stats(replicationStats, "lambda_scan_infinite")
+
+    # NEW: genera i grafici dall'infinite_statistics.csv
+    plot_infinite_analysis()
     return replicationStats
 
 
@@ -288,72 +293,106 @@ def start_scalability_simulation():
 def print_csv_legend():
     print("\n=== CSV Columns Legend ===\n")
 
+    # Notazione (ASCII semplice)
+    print("NOTAZIONE:")
+    print("  S            = tempo di servizio")
+    print("  E(Ts_*)      = tempo di risposta (sojourn) del nodo *")
+    print("  E(Tq_*)      = tempo di coda del nodo *")
+    print("  E(N_*)       = numero medio nel nodo *")
+    print("  E(Nq_*)      = numero medio in coda nel nodo *")
+    print("  E(Ns_*)      = numero medio in servizio (server occupati) nel nodo *")
+    print("  ρ_* ≈ E(Ns_*)/m_*   |   X_* = completamenti/tempo")
+    print("  Suffix di classe: _E = classe E, _C = classe C\n")
+
     legend = {
         # Identificativi simulazione
-        "seed": "Identificativo del seme RNG usato per la replica (per riproducibilità).",
-        "slot": "Indice della fascia oraria (utile per scenari con λ variabile per slot).",
-        "lambda": "Tasso medio di arrivi impostato in quella replica (job/unità tempo).",
+        "seed":  "seed RNG (riproducibilità).",
+        "slot":  "indice della fascia oraria (slot λ).",
+        "lambda":"tasso d’arrivo (job/s).",
+        "batch": "indice batch (orizzonte infinito).",
 
-        # Tempi
-        "edge_avg_wait": "Tempo medio di risposta W del nodo Edge (attesa + servizio).",
-        "cloud_avg_wait": "Tempo medio di risposta W del nodo Cloud.",
-        "coord_avg_wait": "Tempo medio di risposta W del nodo Coordinator.",
-        "edge_avg_delay": "Tempo medio di attesa in coda Wq del nodo Edge (senza servizio).",
-        "cloud_avg_delay": "Tempo medio di attesa in coda Wq del nodo Cloud.",
-        "coord_avg_delay": "Tempo medio di attesa in coda Wq del nodo Coordinator.",
+        # --- Tempi (STANDARD) -> *_avg_wait = E(Ts_*), *_avg_delay = E(Tq_*) ---
+        "edge_avg_wait":   "E(Ts_Edge)",
+        "edge_avg_delay":  "E(Tq_Edge)",
+        "cloud_avg_wait":  "E(Ts_Cloud)",
+        "cloud_avg_delay": "E(Tq_Cloud)",
+        "coord_avg_wait":  "E(Ts_Coord)",
+        "coord_avg_delay": "E(Tq_Coord)",
 
-        # Numero medio di job
-        "edge_L": "Numero medio di job presenti nel nodo Edge (in coda + in servizio).",
-        "edge_Lq": "Numero medio di job in coda nel nodo Edge.",
-        "cloud_L": "Numero medio di job presenti nel nodo Cloud.",
-        "cloud_Lq": "Numero medio di job in coda nel nodo Cloud.",
-        "coord_L": "Numero medio di job presenti nel nodo Coordinator.",
-        "coord_Lq": "Numero medio di job in coda nel nodo Coordinator.",
+        # --- Numeri medi (STANDARD) ---
+        "edge_L":   "E(N_Edge)",
+        "edge_Lq":  "E(Nq_Edge)",
+        "cloud_L":  "E(N_Cloud)",
+        "cloud_Lq": "E(Nq_Cloud)",
+        "coord_L":  "E(N_Coord)",
+        "coord_Lq": "E(Nq_Coord)",
 
-        # Utilizzazione
-        "edge_utilization": "Utilizzazione media aggregata del nodo Edge (area.service/T).",
-        "coord_utilization": "Utilizzazione media aggregata del nodo Coordinator.",
-        "cloud_avg_busy_servers": "Numero medio di server occupati nel Cloud (ρ in multi-server).",
+        # --- Utilizzazione / busy (STANDARD) ---
+        "edge_utilization":       "ρ_Edge  (≈ E(Ns_Edge)/m_Edge)",
+        "coord_utilization":      "ρ_Coord",
+        "cloud_avg_busy_servers": "E(Ns_Cloud)",
 
-        # Throughput
-        "edge_throughput": "Tasso medio di completamenti X nel nodo Edge (job/unità tempo).",
-        "cloud_throughput": "Tasso medio di completamenti X nel nodo Cloud.",
-        "coord_throughput": "Tasso medio di completamenti X nel nodo Coordinator.",
+        # --- Throughput (STANDARD) ---
+        "edge_throughput":  "X_Edge",
+        "cloud_throughput": "X_Cloud",
+        "coord_throughput": "X_Coord",
 
-        # Tempi di servizio medi osservati
-        "edge_service_time_mean": "Tempo medio di servizio realizzato nel nodo Edge (1/μ osservato).",
-        "cloud_service_time_mean": "Tempo medio di servizio realizzato nel nodo Cloud.",
-        "coord_service_time_mean": "Tempo medio di servizio realizzato nel nodo Coordinator.",
+        # --- Tempi di servizio (STANDARD) -> service_time_mean = S_* ---
+        "edge_service_time_mean":  "S_Edge",
+        "cloud_service_time_mean": "S_Cloud",
+        "coord_service_time_mean": "S_Coord",
 
-        # Contatori job completati
-        "count_E": "Numero di job di classe E completati.",
-        "count_E_P1": "Numero di job di classe E_P1 completati.",
-        "count_E_P2": "Numero di job di classe E_P2 completati.",
-        "count_E_P3": "Numero di job di classe E_P3 completati.",
-        "count_E_P4": "Numero di job di classe E_P4 completati.",
-        "count_C": "Numero di job di classe C completati.",
+        # --- Metriche per classi (se presenti) ---
+        "edge_avg_wait_E":     "E(Ts_E@Edge)",
+        "edge_E_avg_response": "E(Ts_E@Edge) (alias)",
+        "edge_E_avg_delay":    "E(Tq_E@Edge)",
 
-        # Legacy (vecchie metriche)
-        "E_utilization": (
-            "Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE E "
-            "(cioè la singola coda/server che gestisce i job di tipo E nel modello). "
-            "Non include eventuali altri centri/server presenti nello stesso nodo Edge "
-            "che servono job di altre classi (es. P1, P2...). "
-            "Per questo motivo, se il nodo Edge ospita più code/server per classi diverse, "
-            "questo valore può essere significativamente più basso rispetto a 'edge_utilization', "
-            "che invece considera l'uso complessivo di tutti i server del nodo Edge."
-        ),
-        "C_utilization": (
-            "Utilizzazione calcolata SOLO sul centro di servizio associato alla CLASSE C "
-            "(cioè la singola coda/server che gestisce i job di tipo C nel modello). "
-            "Non include eventuali altri centri/server presenti nello stesso nodo Coordinator "
-            "che servono job di altre classi o funzioni. "
-            "Se il Coordinator ospita più code o server per tipi di job diversi, "
-            "questo valore può essere più basso rispetto a 'coord_utilization', "
-            "che tiene conto di tutti i server presenti nel nodo Coordinator."
-        )
+        # --- Contatori job ---
+        "count_E":    "job E completati",
+        "count_E_P1": "job E (P1) completati",
+        "count_E_P2": "job E (P2) completati",
+        "count_E_P3": "job E (P3) completati",
+        "count_E_P4": "job E (P4) completati",
+        "count_C":    "job C completati",
 
+        # --- Legacy ---
+        "E_utilization": "ρ_E (solo centro di classe E).",
+        "C_utilization": "ρ_C (solo centro di classe C).",
+
+        # === IMPROVED: Edge_NuoviArrivi (E-only) ===
+        "edge_NuoviArrivi_avg_wait":          "E(Ts_E@Edge_NuoviArrivi)",
+        "edge_NuoviArrivi_avg_delay":         "E(Tq_E@Edge_NuoviArrivi)",
+        "edge_NuoviArrivi_L":                 "E(N_E@Edge_NuoviArrivi)",
+        "edge_NuoviArrivi_Lq":                "E(Nq_E@Edge_NuoviArrivi)",
+        "edge_NuoviArrivi_Ls":                "E(Ns_E@Edge_NuoviArrivi)",
+        "edge_NuoviArrivi_utilization":       "ρ_E@Edge_NuoviArrivi (≈ E(Ns_E)/m)",
+        "edge_NuoviArrivi_throughput":        "X_E@Edge_NuoviArrivi",
+        "edge_NuoviArrivi_service_time_mean": "S_E@Edge_NuoviArrivi",
+        "Edge_NuoviArrivi_E_Ts":              "S_E@Edge_NuoviArrivi (alias)",
+
+        # === IMPROVED: Edge_Feedback (C-only) ===
+        "edge_Feedback_avg_wait":          "E(Ts_C@Edge_Feedback)",
+        "edge_Feedback_avg_delay":         "E(Tq_C@Edge_Feedback)",
+        "edge_Feedback_L":                 "E(N_C@Edge_Feedback)",
+        "edge_Feedback_Lq":                "E(Nq_C@Edge_Feedback)",
+        "edge_Feedback_Ls":                "E(Ns_C@Edge_Feedback)",
+        "edge_Feedback_utilization":       "ρ_C@Edge_Feedback (single-server ⇒ ρ = E(Ns_C))",
+        "edge_Feedback_throughput":        "X_C@Edge_Feedback",
+        "edge_Feedback_service_time_mean": "S_C@Edge_Feedback",
+        "Edge_Feedback_E_Ts":              "S_C@Edge_Feedback (alias)",
+
+        # === MERGED SCALABILITY ===
+        "edge_server_number":  "m_Edge (server/core attivi)",
+        "coord_server_number": "m_Coord (server/core attivi)",
+        "pc":  "P_C (prob. instradamento al Cloud dall’Edge)",
+        "p1":  "P(P1 | not Cloud)",
+        "p2":  "P(P2 | not Cloud)",
+        "p3":  "P(P3 | not Cloud)",
+        "p4":  "P(P4 | not Cloud)",
+        "edge_scal_trace":  "traccia scaling Edge: (t, m_Edge, ρ_finestra)",
+        "coord_scal_trace": "traccia scaling Coord: (t, m_Coord, ρ_finestra)",
     }
+
     for name, desc in legend.items():
         print(f"{name:30} -> {desc}")
 
@@ -389,14 +428,7 @@ def improved_start_lambda_scan_simulation():
     print_simulation_stats_improved(replicationStats, "lambda_scan")
 
     if cs.TRANSIENT_ANALYSIS == 1:
-        plot_multi_lambda_per_seed_improved(replicationStats.edge_wait_interval, replicationStats.seeds, "edge nuovi arrivi",
-                                            "lambda_scan", replicationStats.lambdas, replicationStats.slots)
-        plot_multi_lambda_per_seed_improved(replicationStats.cloud_wait_interval, replicationStats.seeds,
-                                            "cloud_server", "lambda_scan", replicationStats.lambdas,
-                                            replicationStats.slots)
-        plot_multi_lambda_per_seed_improved(replicationStats.coord_wait_interval, replicationStats.seeds,
-                                            "coord_server_edge", "lambda_scan", replicationStats.lambdas,
-                                            replicationStats.slots)
+
         # Analisi per λ
         plot_multi_seed_per_lambda_improved(
             replicationStats.edge_wait_interval,
@@ -451,6 +483,8 @@ def improved_start_infinite_lambda_scan_simulation():
             append_stats_improved(replicationStats, results, batch_stats)
 
     print_simulation_stats_improved(replicationStats, "lambda_scan_infinite")
+    # 📊 NEW: genera i grafici dall'infinite_statistics.csv (improved)
+    plot_infinite_analysis_improved()
     return replicationStats
 
 
@@ -724,14 +758,22 @@ def summarize_by_lambda(input_csv: str,
     return output_txt
 
 
+def _fmt_hms(seconds: float) -> str:
+    return str(timedelta(seconds=int(seconds)))
+
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
+    Misura anche i tempi di esecuzione per Standard, Improved e Totale.
     """
+    t0 = time.perf_counter()
+    print(f"\n▶ START: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
     print_csv_legend()
 
+    # ===================== STANDARD =====================
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
+    t_std = time.perf_counter()
 
     stats_finite = start_lambda_scan_simulation()
 
@@ -745,29 +787,42 @@ if __name__ == "__main__":
                         output_dir="reports_Standard_Model")
 
     start_scalability_simulation()
-    # 3) Nome + cartella di destinazione custom
     summarize_by_lambda("output/merged_scalability_statistics.csv",
                         output_name="SCALABILITY_by_lambda_report.txt",
                         output_dir="reports_Standard_Model")
 
-
-
+    dt_std = time.perf_counter() - t_std
+    print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
     print("FINE---- STANDARD MODEL SIMULTIONS.\n")
 
-"""
+    # ===================== IMPROVED =====================
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
+    t_imp = time.perf_counter()
+
     improved_stats_finite = improved_start_lambda_scan_simulation()
+
+    summarize_by_lambda("output_improved/finite_statistics.csv",
+                        output_name="FINITE_statistics_Global.txt",
+                        output_dir="reports_Improved_Model")
+
     improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
+    summarize_by_lambda("output_improved/infinite_statistics.csv",
+                        output_name="INFINITE_statistics_Global.txt",
+                        output_dir="reports_Improved_Model")
 
     improved_start_scalability_simulation()
+    summarize_by_lambda("output_improved/merged_scalability_statistics.csv",
+                        output_name="SCALABILITY_statistics_Global.txt",
+                        output_dir="reports_Improved_Model")
 
-    # finite
-    summarize_by_lambda("output_improved/finite_statistics.csv")
-
-    print("Statsitche FINITE comulative per Migliorativo.\n")
-
+    dt_imp = time.perf_counter() - t_imp
+    print("\nStatsitche FINITE comulative per Migliorativo.\n")
+    print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
     print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
-"""
 
+    # ===================== TOTALE =====================
+    dt_total = time.perf_counter() - t0
+    print(f"⏱ Tempo TOTALE esecuzione: {_fmt_hms(dt_total)}")
+    print(f"▶ END: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
 
 

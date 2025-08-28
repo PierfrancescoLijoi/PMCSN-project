@@ -30,12 +30,14 @@ header_improved = [
     # Edge_NuoviArrivi (ex-Edge)
     "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
     "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_Ls",
     "edge_NuoviArrivi_utilization","edge_NuoviArrivi_throughput",
     "edge_NuoviArrivi_service_time_mean","Edge_NuoviArrivi_E_Ts",
 
     # Edge_Feedback (post-Cloud)
     "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
     "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_Ls",
     "edge_Feedback_utilization","edge_Feedback_throughput",
     "edge_Feedback_service_time_mean","Edge_Feedback_E_Ts",
 
@@ -55,32 +57,6 @@ header_improved = [
 ]
 
 
-header_infinite_improved =[
-    "seed", "slot", "lambda", "batch"
-
-    # tempi
-    "edge_avg_wait", "cloud_avg_wait", "coord_avg_wait",
-    "edge_avg_delay", "cloud_avg_delay", "coord_avg_delay",
-     "edge_E_avg_delay", "edge_E_avg_response",
-
-    # L, Lq
-    "edge_L", "edge_Lq", "cloud_L", "cloud_Lq", "coord_L", "coord_Lq",
-
-    # utilizzazioni per centro
-    "edge_utilization", "coord_utilization", "cloud_avg_busy_servers",
-
-    # throughput
-    "edge_throughput", "cloud_throughput", "coord_throughput",
-
-    # tempi di servizio realizzati
-    "edge_service_time_mean", "cloud_service_time_mean", "coord_service_time_mean",
-
-    # contatori esistenti
-    "count_E", "count_E_P1", "count_E_P2", "count_E_P3", "count_E_P4", "count_C",
-
-    # legacy per compatibilità
-    "E_utilization", "C_utilization"
-]
 
 header_edge_scalability_improved = [
     "seed","lambda","slot",
@@ -150,12 +126,13 @@ infinite_header_improved = [
     # Edge_NuoviArrivi (ex-Edge)
     "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
     "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_Ls",
     "edge_NuoviArrivi_utilization","edge_NuoviArrivi_throughput",
     "edge_NuoviArrivi_service_time_mean","Edge_NuoviArrivi_E_Ts",
 
     # Edge_Feedback
     "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
-    "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_L","edge_Feedback_Lq","edge_Feedback_Ls",
     "edge_Feedback_utilization","edge_Feedback_throughput",
     "edge_Feedback_service_time_mean","Edge_Feedback_E_Ts",
 
@@ -180,14 +157,14 @@ HEADER_MERGED_SCALABILITY_improved = [
     # Edge_NuoviArrivi
     "edge_server_number",
     "edge_NuoviArrivi_avg_wait","edge_NuoviArrivi_avg_delay",
-    "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq",
+    "edge_NuoviArrivi_L","edge_NuoviArrivi_Lq","edge_NuoviArrivi_Ls",  # << NEW
     "edge_NuoviArrivi_service_time_mean",
     "edge_NuoviArrivi_utilization",
     "edge_NuoviArrivi_throughput",
 
     # Edge_Feedback
     "edge_Feedback_avg_wait","edge_Feedback_avg_delay",
-    "edge_Feedback_L","edge_Feedback_Lq",
+    "edge_Feedback_L","edge_Feedback_Lq","edge_Feedback_Ls",     # << NEW
     "edge_Feedback_service_time_mean",
     "edge_Feedback_utilization",
     "edge_Feedback_throughput",
@@ -363,103 +340,6 @@ def _ci_or_none_improved(arr):
         return float(mean), float(ci)
     return None, None
 
-def build_summary_dict_improved(stats, sim_type):
-    """Costruisce un dizionario con tutte le metriche mostrate a schermo, con mean e ±CI."""
-    is_infinite = sim_type in ("lambda_scan_infinite","infinite","infinite_horizon")
-    header = "Infinite Horizon Simulation - Batch Means Summary" if is_infinite \
-             else f"Stats after {cs.REPLICATIONS} replications"
-
-    # prepara tutte le coppie (mean, ci)
-    summary = {
-        "header_improved": header,
-        "sim_type": sim_type,
-        "replications": cs.REPLICATIONS,
-        "generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "metrics": []
-    }
-
-    def add(label, arr):
-        mean, ci = _ci_or_none_improved(arr)
-        if mean is not None:
-            summary["metrics"].append({
-                "name": label,
-                "mean": mean,
-                "ci_95": ci
-            })
-
-    # tempi di risposta
-    add("Edge Node - Average wait time",  stats.edge_wait_times)
-    add("Cloud Server - Average wait time", stats.cloud_wait_times)
-    add("Coordinator Edge - Average wait time", stats.coord_wait_times)
-
-    # attese in coda
-    add("Edge Node - Average delay (queue)",  getattr(stats, 'edge_delay_times', []))
-    add("Cloud Server - Average delay (queue)", getattr(stats, 'cloud_delay_times', []))
-    add("Coordinator Edge - Average delay (queue)", getattr(stats, 'coord_delay_times', []))
-
-    # attese in coda e rispsota classe E edge
-    add("Edge Node (Class E) - Average delay", stats.edge_E_delay_times)
-    add("Edge Node (Class E) - Average response", stats.edge_E_response_times)
-
-    # L e Lq
-    add("Edge Node - Avg number in node (L)", getattr(stats, 'edge_L', []))
-    add("Edge Node - Avg number in queue (Lq)", getattr(stats, 'edge_Lq', []))
-    add("Cloud Server - Avg number in node (L)", getattr(stats, 'cloud_L', []))
-    add("Cloud Server - Avg number in queue (Lq)", getattr(stats, 'cloud_Lq', []))
-    add("Coordinator - Avg number in node (L)", getattr(stats, 'coord_L', []))
-    add("Coordinator - Avg number in queue (Lq)", getattr(stats, 'coord_Lq', []))
-
-    # utilizzazioni
-    add("Edge Node - Utilization", getattr(stats, 'edge_utilization', []))
-    add("Coordinator - Utilization", getattr(stats, 'coord_utilization', []))
-    add("Cloud - Avg busy servers", getattr(stats, 'cloud_busy', []))
-
-    # throughput
-    add("Edge Node - Throughput", getattr(stats, 'edge_X', []))
-    add("Cloud - Throughput", getattr(stats, 'cloud_X', []))
-    add("Coordinator - Throughput", getattr(stats, 'coord_X', []))
-
-    return summary
-
-def save_summary_json_improved(summary, sim_type, filename=None):
-    """
-    Salva il riepilogo in JSON ordinato in una cartella per tipo di analisi.
-    Esempio: output/summaries/orizzonte_infinito/summary_orizzonte_infinito_20250811_153045.json
-    """
-    label = _label_for_sim_improved(sim_type)
-    out_dir = os.path.join(file_path_improved, "summaries", label)
-    os.makedirs(out_dir, exist_ok=True)
-
-    if filename is None:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"summary_{label}_{ts}.json"
-    path = os.path.join(out_dir, filename)
-
-    with open(path, "w", encoding="utf-8") as f:
-        json.dump(summary, f, ensure_ascii=False, indent=2)
-    return path
-
-
-def save_summary_txt_improved(summary, sim_type, filename=None):
-    """
-    (Opzionale) Salva un .txt simile alla stampa a schermo in una cartella per tipo di analisi.
-    Esempio: output/summaries/scalabilita_edge/summary_scalabilita_edge_20250811_153210.txt
-    """
-    label = _label_for_sim_improved(sim_type)
-    out_dir = os.path.join(file_path_improved, "summaries", label)
-    os.makedirs(out_dir, exist_ok=True)
-
-    if filename is None:
-        ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-        filename = f"summary_{label}_{ts}.txt"
-    path = os.path.join(out_dir, filename)
-
-    with open(path, "w", encoding="utf-8") as f:
-        f.write(f"=== {summary['header_improved']} ===\n")
-        for m in summary["metrics"]:
-            f.write(f"{m['name']}: {m['mean']:.6f} ± {m['ci_95']:.6f}\n")
-    return path
-
 def print_simulation_stats_improved(stats, sim_type):
 
 
@@ -477,6 +357,13 @@ def print_simulation_stats_improved(stats, sim_type):
     _print_ci_improved("Edge_NuoviArrivi - Avg number in queue (Lq)", getattr(stats, 'edge_Lq', []))
     _print_ci_improved("Edge_NuoviArrivi - Utilization", getattr(stats, 'edge_utilization', []))
     _print_ci_improved("Edge_NuoviArrivi - Throughput", getattr(stats, 'edge_X', []))
+
+    _print_ci_improved("Edge_NuoviArrivi - Avg number in service (Ls)", getattr(stats, 'edge_Ls', []))
+    _print_ci_improved("Edge_Feedback - Avg number in service (Ls)", getattr(stats, 'feedback_Ls', []))
+
+    _print_ci_improved("Edge_NuoviArrivi - Avg number in service (Ls)", getattr(stats, 'edge_Ls', []))   # << NEW
+    _print_ci_improved("Edge_Feedback - Avg number in service (Ls)", getattr(stats, 'feedback_Ls', []))  # << NEW
+
 
     _print_ci_improved("Cloud Server - Average wait time", stats.cloud_wait_times)
     _print_ci_improved("Coordinator Edge - Average wait time", stats.coord_wait_times)
@@ -505,8 +392,6 @@ def print_simulation_stats_improved(stats, sim_type):
 
     _print_ci_improved("Cloud - Throughput", getattr(stats, 'cloud_X', []))
     _print_ci_improved("Coordinator - Throughput", getattr(stats, 'coord_X', []))
-
-
 
 def plot_analysis_improved(wait_times, seeds, name, sim_type):
     """
@@ -539,41 +424,6 @@ def plot_analysis_improved(wait_times, seeds, name, sim_type):
     output_path = os.path.join(output_dir, f'{name}.png')
     plt.savefig(output_path)
     plt.close()
-
-
-def plot_multi_lambda_per_seed_improved(wait_times, seeds, name, sim_type, lambdas, slots):
-    """
-    Genera un grafico per seed confrontando più λ,
-    salvando in una cartella per tipo di analisi.
-    Esempio: output/plot/multi_lambda/orizzonte_finito/<name>_seed<seed>.png
-    """
-    label = _label_for_sim_improved(sim_type)
-    output_dir = os.path.join(file_path_improved, "plot", "multi_lambda", label)
-    os.makedirs(output_dir, exist_ok=True)
-
-    # Raggruppo per seed
-    seed_to_runs = {}
-    for idx, seed in enumerate(seeds):
-        if not wait_times[idx]:
-            continue
-        seed_to_runs.setdefault(seed, []).append((slots[idx], lambdas[idx], wait_times[idx]))
-
-    # Creo un grafico per ogni seed
-    for seed, runs in seed_to_runs.items():
-        plt.figure(figsize=(10, 6))
-        for slot, lam, response_times in runs:
-            times = [pt[0] for pt in response_times]
-            avg_response_times = [pt[1] for pt in response_times]
-            plt.plot(times, avg_response_times, label=f"Slot {slot} (λ={lam:.4f})")
-
-        plt.xlabel("Time_improved (s)")
-        plt.ylabel("Average wait time (s)")
-        plt.title(f"Multi-λ Analysis - {name} | Seed {seed}")
-        plt.grid(True)
-
-        output_path = os.path.join(output_dir, f"{name}_seed{seed}.png")
-        plt.savefig(output_path)
-        plt.close()
 
 
 def plot_multi_seed_per_lambda_improved(wait_times, seeds, name, sim_type, lambdas, slots):
@@ -744,3 +594,97 @@ def plot_infinite_analysis_improved():
     plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
                 dpi=150, bbox_inches="tight")
     plt.close()
+
+
+
+def plot_edge_response_vs_pc(csv_path: str,
+                             out_path: str | None = None,
+                             response_col: str | None = None) -> str:
+    """
+    Crea un grafico del tempo di risposta dell'Edge (Nuovi Arrivi) al variare di p_c,
+    disegnando UNA linea per ciascun λ presente nel CSV.
+
+    Parametri:
+      - csv_path    : percorso del CSV (es. "output_improved/merged_scalability_statistics.csv").
+      - out_path    : (opzionale) percorso file immagine di output (.png). Se None, salva in
+                      <dir del csv>/plot/edge_response_vs_pc.png
+      - response_col: (opzionale) nome colonna del tempo di risposta da usare.
+                      Se None, prova in ordine:
+                        "edge_NuoviArrivi_avg_wait" (improved) oppure "edge_avg_wait" (standard).
+
+    Ritorna:
+      - percorso del file PNG generato.
+    """
+    import os
+    import pandas as pd
+    import matplotlib.pyplot as plt
+
+    if not os.path.exists(csv_path):
+        raise FileNotFoundError(f"CSV not found: {csv_path}")
+
+    df = pd.read_csv(csv_path)
+    if df.empty:
+        raise ValueError(f"Nessun dato in {csv_path}")
+
+    # Normalizza i nomi colonna (spazi ecc.)
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Determina la colonna risposta da usare
+    resp = response_col
+    if resp is None:
+        if "edge_NuoviArrivi_avg_wait" in df.columns:
+            resp = "edge_NuoviArrivi_avg_wait"
+        elif "edge_avg_wait" in df.columns:
+            resp = "edge_avg_wait"
+        else:
+            raise ValueError(
+                "Colonna tempo di risposta non trovata. Attese: "
+                "'edge_NuoviArrivi_avg_wait' o 'edge_avg_wait'."
+            )
+
+    # Colonne richieste
+    required = {"pc", "lambda", resp}
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Mancano colonne nel CSV: {missing}")
+
+    # Cast numerico e drop NA
+    for col in ["pc", "lambda", resp]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    df = df.dropna(subset=["pc", "lambda", resp])
+
+    if df.empty:
+        raise ValueError("Dati insufficienti dopo la pulizia per 'pc', 'lambda' e risposta.")
+
+    # Aggrega per (lambda, pc) nel caso di più repliche/righe per combinazione
+    agg = (
+        df.groupby(["lambda", "pc"], as_index=False)[resp]
+          .mean()
+          .rename(columns={resp: "response"})
+          .sort_values(["lambda", "pc"])
+    )
+
+    # Prepara cartella output se non fornita
+    if out_path is None:
+        base_dir = os.path.dirname(os.path.abspath(csv_path))
+        out_dir = os.path.join(base_dir, "plot")
+        os.makedirs(out_dir, exist_ok=True)
+        out_path = os.path.join(out_dir, "edge_response_vs_pc.png")
+    else:
+        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
+
+    # Plot: una linea per ciascun λ
+    plt.figure()
+    for lam, g in agg.groupby("lambda"):
+        plt.plot(g["pc"], g["response"], label=f"λ={lam}")
+
+    plt.xlabel("p_c")
+    plt.ylabel("Tempo di risposta Edge (W)")
+    plt.title("Edge (Nuovi Arrivi): tempo di risposta vs p_c — una linea per λ")
+    plt.legend(title="λ")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+
+    print(f"[plot_edge_response_vs_pc] Grafico salvato in: {out_path}")
+    return out_path
