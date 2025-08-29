@@ -85,13 +85,13 @@ def _edge_try_start_service_improved(stats):
             # Avvio servizio su server s
             if job == "E":
                 service = GetServiceEdgeE_im()  # Usa Ts = EDGE_SERVICE_E_im (0.42s)
-                stats.area_E.service += service  # per classe E
+
             else:
                 print("Con il nuovo modello non si servono più job 'C' all'Edge")
                 return # (non dovrebbe mai capitare)
 
 
-            stats.area_edge.service += service  # tempo totale di servizio erogato all'Edge
+
             stats.edge_comp[s] = stats.t.current + service
             stats.edge_busy[s] = True
             stats.edge_jobtype[s] = job
@@ -299,6 +299,15 @@ def execute_improved(stats, stop, forced_lambda=None):
         stats.area_E.node += dt * stats.number_E
     if stats.number_feedback > 0: stats.area_feedback.node += dt * stats.number_feedback
 
+    # --- NEW: integrazione dell’area di servizio Edge (multi-server) ---
+    if hasattr(stats, 'edge_busy'):
+        busy_edge = sum(1 for b in stats.edge_busy if b)
+    else:
+        busy_edge = min(stats.number_edge, getattr(stats, 'edge_m', 1))  # fallback
+    if busy_edge > 0:
+        stats.area_edge.service += dt * busy_edge  # Ls integrale del centro Edge
+        stats.area_E.service += dt * busy_edge  # (se tieni il tracking per classe E)
+
     # Avanza il clock
     stats.t.current = stats.t.next
 
@@ -422,8 +431,8 @@ def return_stats_improved(stats, t, seed):
     # --- Medie per job completato ---
     ENA_W   = (stats.area_edge.node  / stats.index_edge)   if stats.index_edge   > 0 else 0.0
     ENA_Wq  = (stats.area_edge.queue / stats.index_edge)   if stats.index_edge   > 0 else 0.0
-    C_W     = 0.0
-    C_Wq    = cs.CLOUD_SERVICE
+    C_W     = cs.CLOUD_SERVICE
+    C_Wq    = 0.0
     CO_W    = (stats.area_coord.node / stats.index_coord)  if stats.index_coord  > 0 else 0.0
     CO_Wq   = (stats.area_coord.queue/ stats.index_coord)  if stats.index_coord  > 0 else 0.0
 

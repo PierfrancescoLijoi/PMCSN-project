@@ -828,12 +828,19 @@ if __name__ == "__main__":
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
     t_imp = time.perf_counter()
 
+
+
+    improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
+    summarize_by_lambda("output_improved/infinite_statistics.csv",
+                        output_name="INFINITE_statistics_Global.txt",
+                        output_dir="reports_Improved_Model")
+    """
     improved_stats_finite = improved_start_lambda_scan_simulation()
 
     summarize_by_lambda("output_improved/finite_statistics.csv",
                         output_name="FINITE_statistics_Global.txt",
                         output_dir="reports_Improved_Model")
-
+                        
     improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
     summarize_by_lambda("output_improved/infinite_statistics.csv",
                         output_name="INFINITE_statistics_Global.txt",
@@ -843,7 +850,7 @@ if __name__ == "__main__":
     summarize_by_lambda("output_improved/merged_scalability_statistics.csv",
                         output_name="SCALABILITY_statistics_Global.txt",
                         output_dir="reports_Improved_Model")
-
+    """
     dt_imp = time.perf_counter() - t_imp
     print("\nStatsitche FINITE comulative per Migliorativo.\n")
     print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
