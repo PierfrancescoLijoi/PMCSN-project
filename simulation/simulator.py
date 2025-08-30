@@ -313,21 +313,39 @@ def return_stats(stats, t, seed):
     s_cloud  = (stats.area_cloud.service / stats.index_cloud) if stats.index_cloud > 0 else 0.0
     s_coord  = (stats.area_coord.service / stats.index_coord) if stats.index_coord > 0 else 0.0
 
-    # --- Medie per classe al nodo Edge (usano completamenti Edge della rispettiva classe) ---
-    edge_E_W   = (stats.area_E.node   / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
-    edge_E_Wq  = (stats.area_E.queue  / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
-    edge_C_W   = (stats.area_C.node   / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
-    edge_C_Wq  = (stats.area_C.queue  / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+    # --- Ripartizione per classe robusta (mantiene L e Lq coerenti) ---
+    # Condividiamo l'area di nodo dell'Edge fra E e C in proporzione all'area di servizio
+    # (invarianti: area_E.node + area_C.node == area_edge.node, idem per le queue).
+    total_serv = stats.area_edge.service
+    share_E = (stats.area_E.service / total_serv) if total_serv > 0 else 0.0
+    share_C = (stats.area_C.service / total_serv) if total_serv > 0 else 0.0
 
-    # Utilizzazioni per classe all'Edge (devono sommare a edge_util)
-    edge_E_util = (stats.area_E.service / t) if t > 0 else 0.0
-    edge_C_util = (stats.area_C.service / t) if t > 0 else 0.0
+    # Aree "ricostruite" per classe (durante il batch corrente)
+    E_node_area = share_E * stats.area_edge.node
+    C_node_area = share_C * stats.area_edge.node
+    E_serv_area = stats.area_E.service
+    C_serv_area = stats.area_C.service
 
-    # --- Popolazioni medie per classe all'Edge ---
-    edge_E_L = (stats.area_E.node / t) if t > 0 else 0.0
-    edge_E_Lq = (stats.area_E.queue / t) if t > 0 else 0.0
-    edge_C_L = (stats.area_C.node / t) if t > 0 else 0.0
-    edge_C_Lq = (stats.area_C.queue / t) if t > 0 else 0.0
+    # Queue areas (clamp a zero per tolleranze numeriche)
+    E_queue_area = max(0.0, E_node_area - E_serv_area)
+    C_queue_area = max(0.0, C_node_area - C_serv_area)
+
+    # --- Medie per classe al nodo Edge ---
+    # Tempi medi (risposta / coda) calcolati con i completamenti della rispettiva classe
+    edge_E_W = (E_node_area / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
+    edge_E_Wq = (E_queue_area / stats.index_edge_E) if stats.index_edge_E > 0 else 0.0
+    edge_C_W = (C_node_area / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+    edge_C_Wq = (C_queue_area / stats.index_edge_C) if stats.index_edge_C > 0 else 0.0
+
+    # Utilizzazioni per classe (invarianti: sommano a edge_util)
+    edge_E_util = (E_serv_area / t) if t > 0 else 0.0
+    edge_C_util = (C_serv_area / t) if t > 0 else 0.0
+
+    # Popolazioni medie per classe
+    edge_E_L = (E_node_area / t) if t > 0 else 0.0
+    edge_E_Lq = (E_queue_area / t) if t > 0 else 0.0
+    edge_C_L = (C_node_area / t) if t > 0 else 0.0
+    edge_C_Lq = (C_queue_area / t) if t > 0 else 0.0
 
     return {
         'seed': seed,
