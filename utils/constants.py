@@ -12,7 +12,7 @@ nel documento PMCSN Project (Luglio 2025).
 # -------------------------
 SEED = 123456789
 # Numero di repliche per stimare le metriche (Sezione 5.2 - batch means e replicazioni)
-REPLICATIONS = 8
+REPLICATIONS = 100
 
 
 

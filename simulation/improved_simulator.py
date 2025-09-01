@@ -315,7 +315,7 @@ def execute_improved(stats, stop, forced_lambda=None):
     interval = 1000
     if int(stats.t.current) % interval == 0:
         avg_edge = stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0
-        avg_cloud = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0
+        avg_cloud = cs.CLOUD_SERVICE  # (tempo di servizio fisso, non coda)
         avg_coord = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0
         avg_feedback = stats.area_feedback.node / stats.index_feedback if stats.index_feedback > 0 else 0
         stats.edge_wait_times.append((stats.t.current, avg_edge))

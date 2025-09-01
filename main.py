@@ -77,6 +77,8 @@ def start_lambda_scan_simulation():
             edge_E_wait_times=replicationStats.edge_E_wait_interval,  # <---
             edge_C_wait_times=replicationStats.edge_C_wait_interval  # <---
         )
+        # Disegna il grafico del centro Edge_Feedback
+
 
         # per Cloud/Coord chiamala come prima, senza argomenti extra
 
@@ -437,6 +439,17 @@ def improved_start_lambda_scan_simulation():
             replicationStats.lambdas,
             replicationStats.slots
         )
+        plot_multi_seed_per_lambda_improved(
+            replicationStats.feedback_wait_times,  # serie (t, valore)
+            replicationStats.seeds,  # etichetta del seed
+            "Edge_Feedback",  # nome per file/titolo
+            "lambda_scan",
+            replicationStats.lambdas,
+            replicationStats.slots
+            # mappa su "orizzonte_finito"
+        )
+
+
         plot_multi_seed_per_lambda_improved(
             replicationStats.cloud_wait_interval,
             replicationStats.seeds,
@@ -827,13 +840,8 @@ if __name__ == "__main__":
     # ===================== IMPROVED =====================
     print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
     t_imp = time.perf_counter()
+    improved_stats_finite = improved_start_lambda_scan_simulation()
 
-
-
-    improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
-    summarize_by_lambda("output_improved/infinite_statistics.csv",
-                        output_name="INFINITE_statistics_Global.txt",
-                        output_dir="reports_Improved_Model")
     """
     improved_stats_finite = improved_start_lambda_scan_simulation()
 
@@ -850,12 +858,12 @@ if __name__ == "__main__":
     summarize_by_lambda("output_improved/merged_scalability_statistics.csv",
                         output_name="SCALABILITY_statistics_Global.txt",
                         output_dir="reports_Improved_Model")
-    """
+
     dt_imp = time.perf_counter() - t_imp
     print("\nStatsitche FINITE comulative per Migliorativo.\n")
     print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
     print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
-
+"""
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0
     print(f"⏱ Tempo TOTALE esecuzione: {_fmt_hms(dt_total)}")
