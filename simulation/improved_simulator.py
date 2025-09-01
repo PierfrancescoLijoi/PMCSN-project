@@ -317,10 +317,11 @@ def execute_improved(stats, stop, forced_lambda=None):
         avg_edge = stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0
         avg_cloud = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0
         avg_coord = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0
-
+        avg_feedback = stats.area_feedback.node / stats.index_feedback if stats.index_feedback > 0 else 0
         stats.edge_wait_times.append((stats.t.current, avg_edge))
         stats.cloud_wait_times.append((stats.t.current, avg_cloud))
         stats.coord_wait_times.append((stats.t.current, avg_coord))
+        stats.feedback_wait_times.append((stats.t.current, avg_feedback))
 
     # Gestione eventi ----------------------------------------------------
 

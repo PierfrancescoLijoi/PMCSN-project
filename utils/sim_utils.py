@@ -303,12 +303,13 @@ def append_stats_improved(replicationStats, results, stats):
     replicationStats.seeds.append(results['seed'])
     replicationStats.lambdas.append(results.get('lambda'))
     replicationStats.slots.append(results.get('slot'))
-
+    replicationStats.feedback_wait_times.append(stats.feedback_wait_times)
     # --- Tempi di risposta (usa Edge_NuoviArrivi come 'edge') ---
     replicationStats.edge_wait_times.append(results['edge_NuoviArrivi_avg_wait'])
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
-
+    # NEW: aggiungi anche le serie del feedback
+    replicationStats.feedback_wait_times.append(stats.feedback_wait_times)
     # --- Tempi di attesa/risposta per job di classe E (legacy dal tuo modello) ---
     replicationStats.edge_E_delay_times.append(results['edge_E_avg_delay'])
     replicationStats.edge_E_response_times.append(results['edge_E_avg_response'])

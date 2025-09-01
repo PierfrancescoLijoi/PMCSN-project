@@ -65,6 +65,7 @@ class SimulationStats_improved:
         self.area_feedback = Track()
         self.queue_feedback = []
         self.index_feedback = 0
+        self.feedback_wait_times = []
 
     def reset(self, start_time):
         self.t.current = start_time
@@ -144,7 +145,7 @@ class ReplicationStats_improved:
         self.seeds = []
         self.lambdas = []
         self.slots = []
-
+        self.feedback_wait_times = []
         # tempi medi attesa e risposta classe E
         self.edge_E_delay_times = []
         self.edge_E_response_times = []
