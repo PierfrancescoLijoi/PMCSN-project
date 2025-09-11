@@ -188,10 +188,12 @@ def start_scalability_simulation():
         edge_servers_all, coord_servers_all = [], []
         edge_scale_events, coord_scale_events = [], []
 
+        J_REP = 10 ** 10  # salto ampio per separare le repliche (come in finite_simulation)
+
         for rep in range(cs.REPLICATIONS):
             print(f"  ★ Replica {rep + 1}")
-            plantSeeds(cs.SEED + rep)
-            seed = getSeed()
+            seed = lehmer_replica_seed(cs.SEED, J_REP, rep)  # seed indipendente per replica
+            plantSeeds(seed)  # imposta gli stream RNG
 
             edge_wait_this_rep, coord_wait_this_rep, cloud_wait_this_rep = [], [], []
             t_trace, edge_trace, coord_trace = [], [], []
@@ -262,19 +264,27 @@ def start_scalability_simulation():
                     break
             return v_last
 
-        avg_edge, avg_coord = [], []
+        from collections import Counter
+
+        def modal_value(values):
+            c = Counter(values)
+            m = max(c.values())
+            # tie-break: tra i più frequenti scegliamo il più piccolo
+            return min([v for v, cnt in c.items() if cnt == m])
+
+        mode_edge, mode_coord = [], []
         for t in grid:
             vals_e = [step_value(tr, t) for tr in rep_traces_edge]
             vals_c = [step_value(tr, t) for tr in rep_traces_coord]
-            avg_edge.append(sum(vals_e) / max(1, len(vals_e)))
-            avg_coord.append(sum(vals_c) / max(1, len(vals_c)))
+            mode_edge.append(modal_value(vals_e) if vals_e else 1)
+            mode_coord.append(modal_value(vals_c) if vals_c else 1)
 
         plt.figure()
-        plt.plot(grid, avg_edge, label="Edge servers (media repliche)")
-        plt.plot(grid, avg_coord, label="Coordinator servers (media repliche)")
+        plt.step(grid, mode_edge, where="post", label="Edge servers (moda repliche)")
+        plt.step(grid, mode_coord, where="post", label="Coordinator servers (moda repliche)")
         plt.xlabel("Tempo")
         plt.ylabel("Numero server")
-        plt.title(f"Andamento server nel tempo – pc={pc:.2f} (media su {cs.REPLICATIONS} repliche)")
+        plt.title(f"Andamento server nel tempo – pc={pc:.2f} (moda su {cs.REPLICATIONS} repliche)")
         plt.legend()
         fig_path = os.path.join(output_dir, f"servers_over_time_pc_{str(pc).replace('.', '_')}.png")
         plt.savefig(fig_path, dpi=150, bbox_inches="tight")
@@ -833,23 +843,23 @@ if __name__ == "__main__":
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
     t_std = time.perf_counter()
 
-    stats_finite = start_finite_simulation()
+    #stats_finite = start_finite_simulation()
 
-    summarize_by_lambda("output/finite_statistics.csv",
-                        output_name="FINITE_statistics_Global.txt",
-                        output_dir="reports_Standard_Model")
+    #summarize_by_lambda("output/finite_statistics.csv",
+    #                    output_name="FINITE_statistics_Global.txt",
+     #                   output_dir="reports_Standard_Model")
 
-    start_transient_analysis()
+   # start_transient_analysis()
 
-    stats_infinite = start_infinite_single_simulation()
-    summarize_by_lambda("output/infinite_statistics.csv",
-          output_name="INFINITE_statistics_Global.txt",
-          output_dir="reports_Standard_Model")
+   # stats_infinite = start_infinite_single_simulation()
+   # summarize_by_lambda("output/infinite_statistics.csv",
+      #    output_name="INFINITE_statistics_Global.txt",
+      #    output_dir="reports_Standard_Model")
 
-    # start_scalability_simulation()
-    # summarize_by_lambda("output/merged_scalability_statistics.csv",
-    #       output_name="SCALABILITY_by_lambda_report.txt",
-                        #       output_dir="reports_Standard_Model")
+    start_scalability_simulation()
+    summarize_by_lambda("output/merged_scalability_statistics.csv",
+          output_name="SCALABILITY_by_lambda_report.txt",
+                               output_dir="reports_Standard_Model")
 
     #  dt_std = time.perf_counter() - t_std
     # print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
