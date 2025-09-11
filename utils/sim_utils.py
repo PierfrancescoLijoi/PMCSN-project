@@ -254,36 +254,31 @@ def reset_infinite(self):
 # INTERVALLI DI CONFIDENZA
 # -------------------------------
 
-def calculate_confidence_interval(data, confidence=0.95):
-    """
-    Restituisce (media, half-width) dell'intervallo di confidenza (1-α) basato su t-Student.
-    Usa s campionaria / sqrt(n) e t_{1-α/2, n-1}.
-    Se SciPy non è disponibile, fa fallback a z (1.96 per 95%).
-    """
-    xs = list(map(float, data))
+def calculate_confidence_interval(data, confidence=None):
+    xs = [float(x) for x in data]
     n = len(xs)
     if n < 2:
-        # Con un solo campione non ha senso un CI: half-width = 0
-        m = xs[0] if n == 1 else 0.0
-        return float(m), 0.0
+        return (xs[0] if n == 1 else 0.0), 0.0
 
     m = statistics.mean(xs)
-    s = safe_stdev(xs)  # già campionaria (n-1)
+    # stdev campionaria (n-1)
+    s = safe_stdev(xs)
 
-    alpha = 1.0 - float(confidence)
+    # livello di confidenza: usa ALPHA centrale se non passato
+    if confidence is None:
+        confidence = 1.0 - getattr(cs, "ALPHA", 0.05)
+    alpha = 1.0 - confidence
     df = n - 1
 
-    t_crit = None
     try:
         from scipy.stats import t as student_t
-        t_crit = float(student_t.ppf(1.0 - alpha/2.0, df))
+        tcrit = float(student_t.ppf(1.0 - alpha/2.0, df))
     except Exception:
-        # Fallback: normale standard
-        # 95% -> 1.96; per altri livelli potresti aggiungere una mini-tabella se serve
-        t_crit = 1.96 if abs(confidence - 0.95) < 1e-12 else 1.96
+        # fallback prudente
+        tcrit = 1.96 if abs(confidence - 0.95) < 1e-6 else 1.96
 
-    half_width = t_crit * (s / sqrt(n))
-    return float(m), float(half_width)
+    half = tcrit * (s / sqrt(n))
+    return float(m), float(half)
 
 
 # -------------------------------
