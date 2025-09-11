@@ -38,7 +38,7 @@ STOP_INFINITE = float("inf")
 INFINITY = float("inf")
 
 
-#ANalisi transiente
+#Analisi transiente
 TRANSIENT_REPLICATIONS = 20
 
 # -------------------------
@@ -84,11 +84,12 @@ UTILIZATION_LOWER = 0.3  # rimozione server sotto 30% utilizzo
 # λ stimati per fasce orarie sulla base dei dati ADR (Tabella \ref{tab:lambda})
 # Ogni tupla = (inizio_fascia_sec, fine_fascia_sec, lambda [job/min])
 LAMBDA_SLOTS = [
-    (21600, 36000, 1.880303),   # 06:00 - 09:59 con k=7.0
-    (36000, 50400, 1.343074),  # 10:00 - 13:59
-    (50400, 64800, 1.074459),    # 14:00 - 17:59
-    (64800, 79200, 0.644675),    # 18:00 - 21:59
-    (79200, 90000, 0.429783)     # 22:00 - 02:00
+    (0,    14399, 1.21),   # 00:00 - 03:59 con k=7.5
+    (14400, 28799, 1.45),  # 04:00–07:59
+    (28800, 43199, 1.33),    # 08:00–11:59
+    (43200, 57599, 1.50),    # 12:00–15:59
+    (57600, 71999, 1.38),     # 16:00–19:59
+    (72000, 86399, 1.41)     # 20:00–23:59
 ]
 LAMBDA = 1.38
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
@@ -110,7 +111,7 @@ CLOUD_SERVICE = 0.8
 # - P3/P4: servizio variabile e più lungo → distribuzione lognormale
 # Riferimento: Sezione "Coordinator Server Edge"
 COORD_SERVICE_P1P2 = 0.4   # media esponenziale
-COORD_SERVICE_P3P4 = 0.6   # media lognormale
+COORD_SERVICE_P3P4 = 0.6   # media esponenziale
 
 
 # -------------------------

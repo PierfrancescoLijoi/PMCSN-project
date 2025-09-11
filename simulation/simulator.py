@@ -201,12 +201,13 @@ def execute(stats, stop, forced_lambda=None):
                 else:
                     # verso Coordinator (P1..P4)
                     stats.number_coord += 1
-                    coord_r = (r - cs.P_C) / (1 - cs.P_C)
-                    if coord_r < cs.P1_PROB:
+                    # routing tra le classi del Coordinator: usa le PROBABILITÀ CONDIZIONATE (somma=1)
+                    coord_r = (r - cs.P_C) / (1 - cs.P_C)  # U(0,1)
+                    if coord_r < cs.P1:
                         stats.queue_coord_low.append("P1")
-                    elif coord_r < cs.P1_PROB + cs.P2_PROB:
+                    elif coord_r < cs.P1 + cs.P2:
                         stats.queue_coord_low.append("P2")
-                    elif coord_r < cs.P1_PROB + cs.P2_PROB + cs.P3_PROB:
+                    elif coord_r < cs.P1 + cs.P2 + cs.P3:
                         stats.queue_coord_high.append("P3")
                     else:
                         stats.queue_coord_high.append("P4")
