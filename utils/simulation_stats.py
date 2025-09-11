@@ -52,6 +52,7 @@ class SimulationStats:
         self.queue_edge = []
         self.queue_coord_high = []
         self.queue_coord_low = []
+        self.cloud_heap = []
 
         self.edge_wait_times = []
         self.cloud_wait_times = []
@@ -77,6 +78,7 @@ class SimulationStats:
         self.queue_edge.clear()
         self.queue_coord_high.clear()
         self.queue_coord_low.clear()
+        self.cloud_heap.clear()
         self.count_E = 0  # Reset del contatore E
         self.count_C = 0  # Reset del contatore C
         self.number_C = 0
@@ -116,23 +118,23 @@ class SimulationStats:
         self.area_C = Track()
 
         # code: svuotiamo per garantire indipendenza tra batch
-        self.queue_edge = []
-        self.queue_coord_low = []
-        self.queue_coord_high = []
+     #   self.queue_edge = []
+     #   self.queue_coord_low = []
+      #  self.queue_coord_high = []
 
         # numero di job in servizio/attesa
-        self.number_edge = 0
-        self.number_cloud = 0
-        self.number_coord = 0
+      #  self.number_edge = 0
+      #  self.number_cloud = 0
+      #  self.number_coord = 0
+     #   self.number_C = 0
 
-        self.number_C = 0
         self.index_edge_E = 0
         self.index_edge_C = 0
 
         # tempi di completamento (nessun job in corso)
-        self.t.completion_edge = cs.INFINITY
-        self.t.completion_cloud = cs.INFINITY
-        self.t.completion_coord = cs.INFINITY
+       # self.t.completion_edge = cs.INFINITY
+       # self.t.completion_cloud = cs.INFINITY
+       # self.t.completion_coord = cs.INFINITY
 
     def calculate_area_queue(self):
         self.area_edge.queue = self.area_edge.node - self.area_edge.service

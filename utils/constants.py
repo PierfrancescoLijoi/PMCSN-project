@@ -31,15 +31,15 @@ START = 0.0
 # Orizzonte finito: 24 ore = 86400 secondi (Sezione 5.1 del documento)
 STOP = 86400
 # Stop ridotto per analisi transiente (documento: Sezione "Analisi Transiente")
-STOP_ANALYSIS = 60000
+STOP_ANALYSIS = 300000
 # Caso infinito (non usato qui, ma previsto come compatibilità col framework)
 STOP_INFINITE = float("inf")
 # Valore infinito per confronti temporali
 INFINITY = float("inf")
 
-# Flag per attivare analisi transiente
-TRANSIENT_ANALYSIS = 1
 
+#ANalisi transiente
+TRANSIENT_REPLICATIONS = 20
 
 # -------------------------
 # Routing e probabilità
@@ -90,6 +90,7 @@ LAMBDA_SLOTS = [
     (64800, 79200, 0.644675),    # 18:00 - 21:59
     (79200, 90000, 0.429783)     # 22:00 - 02:00
 ]
+LAMBDA = 1.38
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 
 

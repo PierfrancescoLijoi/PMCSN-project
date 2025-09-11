@@ -12,46 +12,40 @@ del documento PMCSN Project (Luglio 2025).
 import csv
 import statistics
 import os
+from typing import List, Tuple, Dict, Any, Union
+
 import matplotlib.pyplot as plt
 import pandas as pd
 from utils import constants as cs
 from utils.sim_utils import calculate_confidence_interval
 from datetime import datetime
 import json
+import matplotlib
+matplotlib.use("Agg")
+import numpy as np
+import os
+
 # Directory di output
 file_path = "output/"
 
 # Intestazione CSV per i risultati della simulazione
 header = [
-    "seed", "slot", "lambda",
-
-    # tempi
-    "edge_avg_wait","cloud_avg_wait","coord_avg_wait",
-    "edge_avg_delay","cloud_avg_delay","coord_avg_delay",
-    "edge_E_avg_delay", "edge_E_avg_response",
-    "edge_C_avg_delay","edge_C_avg_response",
-
-    # L, Lq (totali)
-    "edge_L","edge_Lq","cloud_L","cloud_Lq","coord_L","coord_Lq",
-    # L, Lq per classe (Edge)  ← NEW
-    "edge_E_L","edge_E_Lq","edge_C_L","edge_C_Lq",
-
-    # utilizzazioni per centro
-    "edge_utilization","coord_utilization","cloud_avg_busy_servers",
-    # (se le esporti) utilizzazioni per classe (Edge)
-    "edge_E_utilization","edge_C_utilization",
-
-    # throughput
-    "edge_throughput","cloud_throughput","coord_throughput",
-
-    # tempi di servizio realizzati
-    "edge_service_time_mean","cloud_service_time_mean","coord_service_time_mean",
-
-    # contatori esistenti
-    "count_E","count_E_P1","count_E_P2","count_E_P3","count_E_P4","count_C",
-
-    # legacy (se vuoi mantenerli)
-    "E_utilization","C_utilization",
+    "seed",
+    # Edge (centro)
+    "edge_avg_wait", "edge_avg_delay", "edge_avg_service_time", "edge_utilization",
+    "edge_avg_number_node", "edge_avg_number_queue",
+    # Cloud (centro)
+    "cloud_avg_wait", "cloud_avg_delay", "cloud_avg_service_time", "cloud_utilization",
+    "cloud_avg_number_node", "cloud_avg_number_queue",
+    # Coordinator (extra)
+    "coord_avg_wait", "coord_avg_delay", "coord_avg_service_time", "coord_utilization",
+    "coord_avg_number_node", "coord_avg_number_queue",
+    # Classe E (Edge)
+    "count_E", "E_avg_wait", "E_avg_delay", "E_avg_service_time", "E_utilization",
+    "E_avg_number_edge", "E_avg_number_queue_edge",
+    # Classe C (Edge)
+    "count_C", "C_avg_wait", "C_avg_delay", "C_avg_service_time", "C_utilization",
+    "C_avg_number_edge", "C_avg_number_queue_edge",
 ]
 
 # === Header dedicato per la simulazione ad orizzonte infinito ===
@@ -110,6 +104,47 @@ HEADER_MERGED_SCALABILITY = [
     # Tracce serializzate
     "edge_scal_trace","coord_scal_trace"
 ]
+# Mappa header -> chiave nel dict results della tua simulazione
+CSV_KEYMAP = {
+    "seed": "seed",
+
+    "edge_avg_wait": "edge_avg_wait",
+    "edge_avg_delay": "edge_avg_delay",
+    "edge_avg_service_time": "edge_service_time_mean",
+    "edge_utilization": "edge_utilization",
+    "edge_avg_number_node": "edge_L",
+    "edge_avg_number_queue": "edge_Lq",
+
+    "cloud_avg_wait": "cloud_avg_wait",
+    "cloud_avg_delay": "cloud_avg_delay",
+    "cloud_avg_service_time": "cloud_service_time_mean",
+    "cloud_utilization": "cloud_utilization",          # se assente, fallback su busy servers
+    "cloud_avg_number_node": "cloud_L",
+    "cloud_avg_number_queue": "cloud_Lq",
+
+    "coord_avg_wait": "coord_avg_wait",
+    "coord_avg_delay": "coord_avg_delay",
+    "coord_avg_service_time": "coord_service_time_mean",
+    "coord_utilization": "coord_utilization",
+    "coord_avg_number_node": "coord_L",
+    "coord_avg_number_queue": "coord_Lq",
+
+    "count_E": "count_E",
+    "E_avg_wait": "edge_E_avg_response",
+    "E_avg_delay": "edge_E_avg_delay",
+    "E_avg_service_time": "edge_E_service_time_mean",  # potrebbe non esserci: lascio vuoto
+    "E_utilization": "E_utilization",
+    "E_avg_number_edge": "edge_E_L",
+    "E_avg_number_queue_edge": "edge_E_Lq",
+
+    "count_C": "count_C",
+    "C_avg_wait": "edge_C_avg_response",
+    "C_avg_delay": "edge_C_avg_delay",
+    "C_avg_service_time": "edge_C_service_time_mean",  # potrebbe non esserci: lascio vuoto
+    "C_utilization": "C_utilization",
+    "C_avg_number_edge": "edge_C_L",
+    "C_avg_number_queue_edge": "edge_C_Lq",
+}
 
 def clear_merged_scalability_file(file_name: str):
     os.makedirs(file_path, exist_ok=True)
@@ -189,30 +224,56 @@ def write_scalability_trace(trace, seed, lam, slot):
         for time, servers, utilization in trace:
             writer.writerow([seed, lam, slot, time, servers, utilization])
 
-def clear_file(file_name):
-    """
-    Pulisce il file di output e scrive l'intestazione.
-
-    Riferimento: per ogni nuova simulazione (Sezione 5.2),
-    serve un file CSV fresco per raccogliere i dati delle repliche.
-    """
-    path = os.path.join(file_path, file_name)
-    os.makedirs(file_path, exist_ok=True)
-    with open(path, 'w', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header)
-        writer.writeheader()
+def clear_file(file_path: str, header: Dict[str, Any] | None = None):
+    """Svuota il file. Se passi una 'header' (dict), crea il file con intestazione."""
+    os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+    with open(file_path, "w", newline="") as f:
+        if header:
+            w = csv.DictWriter(f, fieldnames=list(header.keys()))
+            w.writeheader()
 
 
-def write_file(results, file_name):
-    """
-    Scrive i risultati di una replica nel file CSV.
+def _is_pathlike(x) -> bool:
+    try:
+        return isinstance(x, (str, bytes, os.PathLike))
+    except TypeError:
+        return False
 
-    Ogni riga corrisponde a una replica con un seed diverso.
+def write_file(a: Union[str, Dict[str, Any], List[Dict[str, Any]]],
+               b: Union[str, Dict[str, Any], List[Dict[str, Any]]]):
     """
-    path = os.path.join(file_path, file_name)
-    with open(path, 'a', newline='', encoding='utf-8') as csvfile:
-        writer = csv.DictWriter(csvfile, fieldnames=header)
-        writer.writerow(results)
+    Accetta sia write_file(file_path, rows) sia write_file(rows, file_path).
+    'rows' può essere un dict (singola riga) o una lista di dict.
+    Scrive l'intestazione se il file è nuovo/vuoto.
+    """
+    # --- disambiguazione degli argomenti ---
+    if _is_pathlike(a) and not _is_pathlike(b):
+        file_path, rows = a, b
+    elif _is_pathlike(b) and not _is_pathlike(a):
+        file_path, rows = b, a
+    else:
+        raise TypeError("write_file vuole (file_path, rows) oppure (rows, file_path).")
+
+    # rows può essere dict o list[dict]
+    if isinstance(rows, dict):
+        rows = [rows]
+    if not rows:
+        return
+
+    # campi/colonne
+    fieldnames = list(rows[0].keys())
+
+    # crea cartella se serve
+    os.makedirs(os.path.dirname(file_path) or ".", exist_ok=True)
+
+    # header se file non esiste o è vuoto
+    must_write_header = (not os.path.exists(file_path)) or os.path.getsize(file_path) == 0
+
+    with open(file_path, "a", newline="") as f:
+        w = csv.DictWriter(f, fieldnames=fieldnames)
+        if must_write_header:
+            w.writeheader()
+        w.writerows(rows)
 
 
 def _print_ci(label, data):
@@ -326,37 +387,67 @@ def print_simulation_stats(stats, sim_type):
     _print_ci("Coordinator - Throughput", getattr(stats, 'coord_X', []))
 
 
-def plot_analysis(wait_times, seeds, name, sim_type):
+
+# utils/simulation_output.py
+def plot_analysis(series, seeds, name, sim_type="finite_fixed_lambda"):
     """
-    Genera un grafico con le curve dei tempi di attesa (transiente),
-    salvando in una cartella per tipo di analisi.
-    Esempio: output/plot/transient_analysis/orizzonte_finito/<name>.png
+    Traccia 1 curva per replica.
+    - series: [[(t,y), ...], [(t,y), ...], ...]  (oppure una singola [(t,y), ...])
+    - seeds:  mantenuto solo per compatibilità; NON usato in legenda
+    - name:   nome file immagine senza estensione
+    - sim_type: per scegliere la sotto-cartella di output
     """
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import os
+    import utils.constants as cs  # per fissare l'asse X a [0, STOP]
+
+    def _is_xy_list(obj):
+        return bool(obj) and isinstance(obj[0], (list, tuple)) and len(obj[0]) == 2 and \
+               all(isinstance(p, (list, tuple)) and len(p) == 2 for p in obj)
+
+    def _is_list_of_xy_lists(obj):
+        return bool(obj) and isinstance(obj[0], (list, tuple)) and _is_xy_list(obj[0])
+
     label = _label_for_sim(sim_type)
-    output_dir = os.path.join(file_path, "plot", "transient_analysis", label)
-    os.makedirs(output_dir, exist_ok=True)
+
+    out_dir = os.path.join(file_path, "plot", label)
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f"{name}.png")
 
     plt.figure(figsize=(10, 6))
 
-    found = False
-    for run_index, response_times in enumerate(wait_times):
-        if not response_times:
-            continue
-        times = [point[0] for point in response_times]
-        avg_response_times = [point[1] for point in response_times]
-        plt.plot(times, avg_response_times, label=f'Seed {seeds[run_index]}')
-        found = True
+    if _is_list_of_xy_lists(series):
+        # Serie = [ replica1[(t,y),...], replica2[(t,y),...], ... ]
+        for run in series:
+            if not run:
+                continue
+            xs = [pt[0] for pt in run]
+            ys = [pt[1] for pt in run]
+            plt.plot(xs, ys)  # nessuna legenda (no seed)
+    elif _is_xy_list(series):
+        xs = [pt[0] for pt in series]
+        ys = [pt[1] for pt in series]
+        plt.plot(xs, ys)
+    else:
+        # Fallback: niente (non abbiamo (t,y))
+        plt.close()
+        return out_path
 
-    plt.xlabel('Time (s)')
-    plt.ylabel('Average wait time (s)')
-    plt.title(f'Transient Analysis - {name}')
-    if found:
-        plt.legend()
-    plt.grid(True)
-
-    output_path = os.path.join(output_dir, f'{name}.png')
-    plt.savefig(output_path)
+    # Assi e stile
+    try:
+        plt.xlim(0, float(getattr(cs, "STOP", 86400.0)))  # 24h = 86400s
+    except Exception:
+        pass
+    plt.xlabel("Simulation time (s)")
+    plt.ylabel("Average response time (s)")
+    plt.title(f"{name} — {label.replace('_', ' ')}")
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=180, bbox_inches="tight")
     plt.close()
+    return out_path
 
 
 
@@ -458,34 +549,54 @@ def plot_infinite_analysis():
         "coord_avg_wait": "mean",
     })
 
+    # --- Batch-means cumulative plots (Edge/Cloud/Coord) ---
+
+    # Batch numerico e pulizia robusta
+    df["batch"] = pd.to_numeric(df["batch"], errors="coerce")
+    df = df.dropna(subset=["batch"]).copy()
+    df["batch"] = df["batch"].astype(int)
+
+    def _running_mean(y):
+        s = pd.to_numeric(y, errors='coerce').fillna(0)
+        return s.expanding().mean()
+
     def plot_node_by_lambda(ycol, title, fname):
         plt.figure()
         any_line = False
-        for lam_val, g in agg_lam_batch.groupby("lambda"):
-            g = g.sort_values("batch")
-            if not g.empty:
-                plt.plot(g["batch"], g[ycol], marker="", label=f"λ={lam_val:.5f}")
-                any_line = True
+        groups = list(df.sort_values(["slot", "lambda", "batch"]).groupby(["slot", "lambda"]))
+        for (slot_val, lam_val), g in groups:
+            if g.empty:
+                continue
+            rm = _running_mean(g[ycol])
+            lab = f"λ={lam_val:.5f}" if df["slot"].nunique() == 1 else f"Slot {slot_val} — λ={lam_val:.5f}"
+            plt.plot(g["batch"], rm, label=lab)
+            any_line = True
         plt.xlabel("Batch")
-        plt.ylabel("Tempo medio di risposta (s)")
-        plt.title(title)
-        if any_line:
+        plt.ylabel("Wait time (media cumulata) [s]")
+        plt.title(title + " — media cumulata")
+        if any_line and len(groups) > 1:
             plt.legend()
         plt.grid(True)
         plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
         plt.close()
 
-    plot_node_by_lambda("edge_avg_wait",
-                        "Nodo Edge: tempo di risposta per batch (linee per λ)",
-                        "infinite_edge_response_vs_batch_per_lambda.png")
-    plot_node_by_lambda("cloud_avg_wait",
-                        "Nodo Cloud: tempo di risposta per batch (linee per λ)",
-                        "infinite_cloud_response_vs_batch_per_lambda.png")
-    plot_node_by_lambda("coord_avg_wait",
-                        "Nodo Coordinator: tempo di risposta per batch (linee per λ)",
-                        "infinite_coord_response_vs_batch_per_lambda.png")
+    plot_node_by_lambda(
+        "edge_avg_wait",
+        "Nodo Edge: wait time medio per batch",
+        "infinite_edge_wait_vs_batch_per_lambda.png"
+    )
+    plot_node_by_lambda(
+        "cloud_avg_wait",
+        "Nodo Cloud: wait time medio per batch",
+        "infinite_cloud_wait_vs_batch_per_lambda.png"
+    )
+    plot_node_by_lambda(
+        "coord_avg_wait",
+        "Nodo Coordinator: wait time medio per batch",
+        "infinite_coord_wait_vs_batch_per_lambda.png"
+    )
 
-    # ---------- 2) Curva Edge response time vs λ con punti per slot + QoS ----------
+    # ---------- 2) Curva Edge wait time vs λ con punti per slot + QoS ----------
     agg_lambda_global = df.groupby("lambda", as_index=False).agg({
         "edge_avg_wait": "mean"
     }).sort_values("lambda")
@@ -499,27 +610,70 @@ def plot_infinite_analysis():
     plt.figure()
     # Curva media globale (λ -> W_edge)
     if not agg_lambda_global.empty:
-        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_avg_wait"],
-                 marker="o", color="blue")
+        plt.plot(
+            agg_lambda_global["lambda"],
+            agg_lambda_global["edge_avg_wait"],
+            marker="o"
+        )
     # Punti per slot
     for slot, g in agg_lambda_slot.groupby("slot"):
         if not g.empty:
             plt.scatter(g["lambda"], g["edge_avg_wait"], label=f"Slot {slot}")
             for _, r in g.iterrows():
-                plt.annotate(f"{r['lambda']:.5f}",
-                             (r["lambda"], r["edge_avg_wait"]),
-                             textcoords="offset points", xytext=(0, 6),
-                             ha="center", fontsize=8)
+                plt.annotate(
+                    f"{r['lambda']:.5f}",
+                    (r["lambda"], r["edge_avg_wait"]),
+                    textcoords="offset points",
+                    xytext=(0, 6),
+                    ha="center",
+                    fontsize=8
+                )
     # Linea QoS
-    plt.axhline(y=qos_seconds, linestyle="--", color="r", linewidth=1.2,
-                label=f"QoS = {qos_seconds:.0f}s")
+    plt.axhline(y=qos_seconds, linestyle="--", linewidth=1.2, label=f"QoS = {qos_seconds:.0f}s")
     plt.xlabel("λ (arrivi/secondo)")
-    plt.ylabel("Tempo medio di risposta Edge (s)")
-    plt.title("Tempo di risposta Edge rispetto a λ (con QoS = 3s)")
+    plt.ylabel("Tempo medio di attesa Edge (s)")
+    plt.title("Wait time Edge rispetto a λ (con QoS = 3s)")
     plt.legend()
     plt.grid(True)
-    plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
-                dpi=150, bbox_inches="tight")
+    plt.savefig(plot_dir / "infinite_edge_wait_vs_lambda_with_qos.png", dpi=150, bbox_inches="tight")
+    plt.close()
+
+
+def plot_transient_with_seeds(series, seeds, name, sim_type="finite_fixed_lambda"):
+    """
+    Disegna una curva per replica e mette 'Seed NNN...' in legenda.
+    - series: [[(t,y),...], [(t,y),...], ...]  (una lista per ogni replica)
+    - seeds:  lista dei seed (stessa lunghezza di series)
+    - name:   nome del file PNG senza estensione
+    - sim_type: sottocartella in output/plot/transient_analysis/
+    """
+    import os
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    import utils.constants as cs
+
+    os.makedirs(os.path.join("output", "plot", "transient_analysis", sim_type), exist_ok=True)
+    plt.figure(figsize=(10, 6))
+
+    for i, run in enumerate(series):
+        if not run:
+            continue
+        xs = [p[0] for p in run]
+        ys = [p[1] for p in run]
+        label = f"Seed {seeds[i]}" if i < len(seeds) else f"replica {i}"
+        plt.plot(xs, ys, label=label)
+
+    plt.xlabel("Time (s)")
+    plt.ylabel("Average wait (s)")
+    plt.xlim(0, cs.STOP_ANALYSIS)
+    plt.grid(True, alpha=0.3)
+    plt.legend(ncol=2, fontsize=8, frameon=False)
+
+    out_dir = os.path.join("output", "plot", "transient_analysis", sim_type)
+    out_path = os.path.join(out_dir, f"{name}.png")
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=160)
     plt.close()
 
 

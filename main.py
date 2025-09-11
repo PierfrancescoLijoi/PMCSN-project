@@ -19,7 +19,7 @@ from simulation.edge_cord_merged_scalability_simulator import edge_coord_scalabi
 from simulation.simulator import finite_simulation, infinite_simulation
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_multi_seed_per_lambda, \
     write_infinite_row, write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
-    plot_infinite_analysis, plot_edge_response_vs_pc
+    plot_infinite_analysis, plot_edge_response_vs_pc, plot_analysis, plot_transient_with_seeds
 from utils.simulation_stats import ReplicationStats
 from simulation.improved_edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation_improved
 from simulation.improved_simulator import finite_simulation_improved, infinite_simulation_improved
@@ -27,107 +27,128 @@ from utils.improved_simulation_output import write_file_improved, clear_file_imp
     plot_multi_seed_per_lambda_improved, \
     write_infinite_row_improved, write_file_merged_scalability_improved, clear_merged_scalability_file_improved, \
     clear_infinite_file_improved, plot_infinite_analysis_improved
-from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, append_stats_improved
+from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, append_stats_improved, \
+    lehmer_replica_seed
 from utils.improved_simulation_stats import ReplicationStats_improved
 from libraries.rngs import plantSeeds, getSeed
 
 
 
-def start_lambda_scan_simulation():
+def start_finite_simulation():
+    lam = cs.LAMBDA          # job/sec
+    stop = cs.STOP           # es. 86400 sec (24h)
     replicationStats = ReplicationStats()
-    print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
+    print("FINITE SIMULATION - Aeroporto Ciampino")
 
-    file_name = "finite_statistics.csv"
+    file_name = os.path.join("output/", "finite_statistics.csv")
     clear_file(file_name)
 
-    # Ciclo sulle repliche
+    J_REP = 10 ** 10  # salto per separare le repliche (sceglilo grande)
+
+    # Esegui le repliche
     for rep in range(cs.REPLICATIONS):
-        # Inizializza il seed per questa replica
-        plantSeeds(cs.SEED + rep)
-        base_seed = getSeed()
-        print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
+        # seed indipendente per replica
+        seed = lehmer_replica_seed(cs.SEED, J_REP, rep)
+        plantSeeds(seed)
 
-        # Ciclo su tutti i λ
-        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-            print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
+        # 1 replica a orizzonte finito
+        results, stats = finite_simulation(stop, forced_lambda=lam)
 
-            stop = cs.SLOT_DURATION
-            results, stats = finite_simulation(stop, forced_lambda=lam)
+        # traccia il seed usato (solo per CSV/riassunti; NON entra in legenda)
+        results['seed'] = seed
 
-            results['lambda'] = lam
-            results['slot'] = lam_index
-            results['seed'] = base_seed  # forza stesso seed nel CSV
-            write_file(results, file_name)
+        # salva riga CSV e accumula statistiche aggregate
+        write_file(results, file_name)
+        append_stats(replicationStats, results, stats)  # <-- qui vengono salvate anche le serie (t, W)
 
-            append_stats(replicationStats, results, stats)
+        if (rep + 1) % 10 == 0:
+            print(f"  -> completate {rep + 1} repliche")
 
-    print_simulation_stats(replicationStats, "lambda_scan")
+    # Stampa riassuntiva (media ± CI)
+    print_simulation_stats(replicationStats, "finite_fixed_lambda")
 
-    if cs.TRANSIENT_ANALYSIS == 1:
-
-
-        # Analisi per λ
-        plot_multi_seed_per_lambda(
-            wait_times=replicationStats.edge_wait_interval,
-            seeds=replicationStats.seeds,
-            name="edge_response_time_global",  # deve iniziare con "edge"
-            sim_type="lambda_scan",
-            lambdas=replicationStats.lambdas,
-            slots=replicationStats.slots,
-            edge_E_wait_times=replicationStats.edge_E_wait_interval,  # <---
-            edge_C_wait_times=replicationStats.edge_C_wait_interval  # <---
-        )
-
-        # per Cloud/Coord chiamala come prima, senza argomenti extra
-
-        plot_multi_seed_per_lambda(
-            replicationStats.cloud_wait_interval,
-            replicationStats.seeds,
-            "cloud_server", "lambda_scan",
-            replicationStats.lambdas,
-            replicationStats.slots
-        )
-        plot_multi_seed_per_lambda(
-            replicationStats.coord_wait_interval,
-            replicationStats.seeds,
-            "coord_server_edge", "lambda_scan",
-            replicationStats.lambdas,
-            replicationStats.slots
-        )
+    # === Grafici transiente: SEMPRE con wait_times (serie [(t, W)]) ===
+    # Una curva per replica, x = tempo simulazione (s), y = tempo medio di risposta
+    plot_analysis(replicationStats.edge_wait_interval,  replicationStats.seeds, "edge_node",               sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.edge_E_wait_interval, replicationStats.seeds, "edge_node_E",
+                  sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.cloud_wait_interval, replicationStats.seeds, "cloud_node",              sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.coord_wait_interval, replicationStats.seeds, "coordinator_server_edge", sim_type="finite_fixed_lambda")
 
     return replicationStats
 
-def start_infinite_lambda_scan_simulation():
-    print("\nINFINITE SIMULATION - Aeroporto Ciampino")
+
+def start_transient_analysis():
+    """
+    Analisi del transitorio con 20 repliche (nessun CSV).
+    Usa finite_simulation() per riempire le serie (t, W) e
+    plotta con legenda 'Seed ...' in output/plot/transient_analysis/finite_fixed_lambda/.
+    """
+    lam = cs.LAMBDA
+    stop = cs.STOP_ANALYSIS
+    reps = int(getattr(cs, "TRANSIENT_REPLICATIONS", 20))
+
+    print(f"\nTRANSIENT ANALYSIS — repliche={reps}, λ={lam:.5f}, stop={stop}s")
+
+    seeds = []
+    edge_series, cloud_series, coord_series = [], [], []
+    edge_E_series, edge_C_series = [], []
+
+    # salti ampi tra repliche con Lehmer per indipendenza dei seed
+    J_REP = 10 ** 10  # grande per separare bene i flussi
+    for r in range(reps):
+        seed = lehmer_replica_seed(cs.SEED, J_REP, r)
+        plantSeeds(seed)
+
+        # singola replica a orizzonte finito (solo serie transiente)
+        _results, stats = finite_simulation(stop, forced_lambda=lam)
+        seeds.append(seed)
+
+        # serie (t, media cumulata) già raccolte in execute()
+        edge_series.append(list(stats.edge_wait_times))
+        cloud_series.append(list(stats.cloud_wait_times))
+        coord_series.append(list(stats.coord_wait_times))
+
+        # per classi all'Edge
+        edge_E_series.append(list(stats.edge_E_wait_times_interval))
+        edge_C_series.append(list(stats.edge_C_wait_times_interval))
+
+    # Grafici con legenda dei seed
+    sim_label = "finite_fixed_lambda"
+    plot_transient_with_seeds(edge_series, seeds, "edge_node", sim_label)
+    plot_transient_with_seeds(edge_E_series, seeds, "edge_node_E", sim_label)
+    plot_transient_with_seeds(edge_C_series, seeds, "edge_node_C", sim_label)
+    plot_transient_with_seeds(cloud_series, seeds, "cloud_node", sim_label)
+    plot_transient_with_seeds(coord_series, seeds, "coordinator_server_edge", sim_label)
+
+    print("Grafici scritti in: output/plot/transient_analysis/finite_fixed_lambda/")
+
+
+
+
+
+def start_infinite_single_simulation():
+    print("\nINFINITE SINGLE-LAMBDA SIMULATION")
 
     file_name = "infinite_statistics.csv"
-    clear_infinite_file(file_name)
+    clear_infinite_file(file_name)  # header già compatibile con batch-means
 
-    replicationStats = ReplicationStats()
-
-    # un solo seed di base per l’infinite horizon
+    # un’unica simulazione lunga, con batch-means
     plantSeeds(cs.SEED)
     base_seed = getSeed()
-    print(f"\n★ Infinite horizon con seed base = {base_seed}")
 
-    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-        print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec")
+    batch_stats = infinite_simulation(forced_lambda=cs.LAMBDA)
 
-        batch_stats = infinite_simulation(forced_lambda=lam)
+    for batch_index, results in enumerate(batch_stats.results):
+        results['lambda'] = cs.LAMBDA   # <— unico λ preso dalle costanti
+        results['slot'] = 0             # <— unico slot “fittizio”
+        results['seed'] = base_seed
+        results['batch'] = batch_index
+        write_infinite_row(results, file_name)
 
-        for batch_index, results in enumerate(batch_stats.results):
-            results['lambda'] = lam
-            results['slot'] = lam_index
-            results['seed'] = base_seed
-            results['batch'] = batch_index
-            write_infinite_row(results, file_name)
-            append_stats(replicationStats, results, batch_stats)
-
-    print_simulation_stats(replicationStats, "lambda_scan_infinite")
-
-    # NEW: genera i grafici dall'infinite_statistics.csv
+    print_simulation_stats(batch_stats, "infinite")
     plot_infinite_analysis()
-    return replicationStats
+    return batch_stats
 
 
 def start_scalability_simulation():
@@ -660,8 +681,10 @@ def summarize_by_lambda(input_csv: str,
                         exclude_cols=None,
                         output_dir: str | None = None) -> str:
     """
-    Crea un report di medie ± CI(95%) raggruppate per λ, usando solo
-    le colonne numeriche effettivamente presenti nel CSV.
+    Crea un report di medie ± CI(95%).
+    - Se il CSV contiene la colonna 'lambda' → raggruppa per λ (comportamento classico).
+    - Se il CSV NON contiene 'lambda' → assume un singolo λ (letto da constants.LAMBDA se disponibile)
+      e produce un unico blocco di riepilogo.
 
     Parametri:
       - input_csv    : percorso al CSV di input.
@@ -671,11 +694,22 @@ def summarize_by_lambda(input_csv: str,
       - output_dir   : cartella di output; se None -> stessa cartella dell'input.
 
     Ritorna:
-      - percorso completo del file di testo generato.
+      Percorso del file di testo generato.
     """
     import os
     import pandas as pd
     from datetime import datetime
+
+    # per recuperare LAMBDA se serve (senza imporre il path esatto del modulo)
+    lambda_from_constants = None
+    for mod_name in ("utils.constants", "constants"):
+        try:
+            cs_mod = __import__(mod_name, fromlist=["LAMBDA"])
+            if hasattr(cs_mod, "LAMBDA"):
+                lambda_from_constants = float(getattr(cs_mod, "LAMBDA"))
+                break
+        except Exception:
+            pass
 
     if not os.path.exists(input_csv):
         raise FileNotFoundError(f"File not found: {input_csv}")
@@ -684,10 +718,8 @@ def summarize_by_lambda(input_csv: str,
     if df.empty:
         raise ValueError(f"No data in {input_csv}")
 
-    # pulizia nomi colonne
+    # normalizza intestazioni
     df.columns = [str(c).strip() for c in df.columns]
-    if 'lambda' not in df.columns:
-        raise ValueError(f"'lambda' column not found in {input_csv}")
 
     # colonne da escludere (default + eventuali custom)
     exclude = set(exclude_cols or [])
@@ -703,24 +735,35 @@ def summarize_by_lambda(input_csv: str,
     for c in df.columns:
         if c in exclude:
             continue
-        # prova a interpretare come numerico
-        series_num = pd.to_numeric(df[c], errors='coerce')
-        if series_num.notna().any():
+        # prova a capire se è numerica
+        try:
+            pd.to_numeric(df[c], errors='raise')
             metric_cols.append(c)
+        except Exception:
+            pass
 
     if not metric_cols:
-        raise ValueError(f"No numeric metric columns found in {input_csv}")
+        raise ValueError("Nessuna metrica numerica trovata nel CSV dopo le esclusioni.")
 
-    grouped = df.groupby('lambda', dropna=True)
+    # utility per mean ± CI(95%)
+    def _mean_ci_95(s: pd.Series):
+        s = pd.to_numeric(s, errors='coerce').dropna()
+        n = s.size
+        if n == 0:
+            return None, None, 0
+        m = float(s.mean())
+        sd = float(s.std(ddof=1)) if n > 1 else 0.0
+        z = 1.96  # 95%
+        margin = z * (sd / (n ** 0.5)) if n > 1 else 0.0
+        return m, margin, n
 
     lines = []
-    title = f"Summary by λ — {os.path.basename(input_csv)}"
-    lines.append(f"=== {title} ===")
-    lines.append(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    lines.append("Note: mean ± 95% CI (z=1.96), aggregated over all rows for each λ.\n")
+    lines.append(f"# Summary report generated on {datetime.now():%Y-%m-%d %H:%M:%S}")
+    lines.append(f"Source CSV: {input_csv}")
+    lines.append("Note: mean ± 95% CI (z=1.96).")
+    lines.append("")
 
     def bucket_key(col: str):
-        # Ordina per famiglie, se presenti; altrimenti cade in (5, col)
         if col.startswith('edge_NuoviArrivi_'): return (0, col)
         if col.startswith('edge_Feedback_'):    return (1, col)
         if col.startswith('cloud_'):            return (2, col)
@@ -728,33 +771,48 @@ def summarize_by_lambda(input_csv: str,
         if col.startswith('edge_'):             return (4, col)
         return (5, col)
 
-    for lam, g in grouped:
-        lines.append(f"--- λ = {lam:.6f}  (rows={len(g)}) ---")
+    if 'lambda' in df.columns:
+        # ---- Caso classico: raggruppa per λ ----
+        grouped = df.groupby('lambda', dropna=False)
+        for lam, g in grouped:
+            lam_val = float(lam) if pd.notna(lam) else (lambda_from_constants if lambda_from_constants is not None else float('nan'))
+            header = f"--- λ = {lam_val:.6f}" if pd.notna(lam_val) else "--- λ = (from CSV)"
+            lines.append(f"{header}  (rows={len(g)})")
+            for col in sorted(metric_cols, key=bucket_key):
+                mean, margin, n = _mean_ci_95(g[col])
+                if mean is None:
+                    continue
+                lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+            lines.append("")
+    else:
+        # ---- Nuovo comportamento: singolo λ implicito ----
+        if lambda_from_constants is not None:
+            lines.append(f"--- λ = {lambda_from_constants:.6f} (single-run)  (rows={len(df)})")
+        else:
+            lines.append(f"--- λ = single-run  (rows={len(df)})")
+
         for col in sorted(metric_cols, key=bucket_key):
-            mean, margin, n = _mean_ci_95(pd.to_numeric(g[col], errors='coerce'))
+            mean, margin, n = _mean_ci_95(df[col])
             if mean is None:
                 continue
             lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
         lines.append("")
 
     # risoluzione percorso output
-    base_dir = output_dir if output_dir is not None else os.path.dirname(input_csv)
-    if not base_dir:
-        base_dir = '.'
+    base_dir = output_dir if output_dir is not None else os.path.dirname(input_csv) or '.'
     os.makedirs(base_dir, exist_ok=True)
 
     if output_name is None or not str(output_name).strip():
         output_txt = os.path.join(base_dir, "summary_by_lambda_Global_Table.txt")
     else:
         # se manca estensione, aggiungi .txt
-        name = str(output_name).strip()
-        if not os.path.splitext(name)[1]:
-            name += ".txt"
-        output_txt = os.path.join(base_dir, name)
+        name = str(output_name)
+        output_txt = os.path.join(base_dir, name if os.path.splitext(name)[1] else f"{name}.txt")
 
     with open(output_txt, "w", encoding="utf-8") as f:
         f.write("\n".join(lines))
 
+    print(f"[OK] Summary written to: {output_txt}")
     return output_txt
 
 
@@ -775,50 +833,52 @@ if __name__ == "__main__":
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
     t_std = time.perf_counter()
 
-    stats_finite = start_lambda_scan_simulation()
+    stats_finite = start_finite_simulation()
 
     summarize_by_lambda("output/finite_statistics.csv",
                         output_name="FINITE_statistics_Global.txt",
                         output_dir="reports_Standard_Model")
 
-    stats_infinite = start_infinite_lambda_scan_simulation()
+    start_transient_analysis()
+
+    stats_infinite = start_infinite_single_simulation()
     summarize_by_lambda("output/infinite_statistics.csv",
-                        output_name="INFINITE_statistics_Global.txt",
-                        output_dir="reports_Standard_Model")
+          output_name="INFINITE_statistics_Global.txt",
+          output_dir="reports_Standard_Model")
 
-    start_scalability_simulation()
-    summarize_by_lambda("output/merged_scalability_statistics.csv",
-                        output_name="SCALABILITY_by_lambda_report.txt",
-                        output_dir="reports_Standard_Model")
+    # start_scalability_simulation()
+    # summarize_by_lambda("output/merged_scalability_statistics.csv",
+    #       output_name="SCALABILITY_by_lambda_report.txt",
+                        #       output_dir="reports_Standard_Model")
 
-    dt_std = time.perf_counter() - t_std
-    print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
-    print("FINE---- STANDARD MODEL SIMULTIONS.\n")
+    #  dt_std = time.perf_counter() - t_std
+    # print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
+    # print("FINE---- STANDARD MODEL SIMULTIONS.\n")
 
     # ===================== IMPROVED =====================
-    print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
-    t_imp = time.perf_counter()
+    # print("INIZIO---- IMPROVED MODEL SIMULTIONS.\n")
+    #  t_imp = time.perf_counter()
 
-    improved_stats_finite = improved_start_lambda_scan_simulation()
+    # improved_stats_finite = improved_start_lambda_scan_simulation()
 
-    summarize_by_lambda("output_improved/finite_statistics.csv",
-                        output_name="FINITE_statistics_Global.txt",
-                        output_dir="reports_Improved_Model")
+    #  summarize_by_lambda("output_improved/finite_statistics.csv",
+    #      output_name="FINITE_statistics_Global.txt",
+    #      output_dir="reports_Improved_Model")
+    #
+    # improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
+    #  summarize_by_lambda("output_improved/infinite_statistics.csv",
+    #                    output_name="INFINITE_statistics_Global.txt",
+    #                   output_dir="reports_Improved_Model")
 
-    improved_stats_infinite = improved_start_infinite_lambda_scan_simulation()
-    summarize_by_lambda("output_improved/infinite_statistics.csv",
-                        output_name="INFINITE_statistics_Global.txt",
-                        output_dir="reports_Improved_Model")
+    # improved_start_scalability_simulation()
+    #summarize_by_lambda("output_improved/merged_scalability_statistics.csv",
+    #   output_name="SCALABILITY_statistics_Global.txt",
+    #    output_dir="reports_Improved_Model")
 
-    improved_start_scalability_simulation()
-    summarize_by_lambda("output_improved/merged_scalability_statistics.csv",
-                        output_name="SCALABILITY_statistics_Global.txt",
-                        output_dir="reports_Improved_Model")
-
-    dt_imp = time.perf_counter() - t_imp
-    print("\nStatsitche FINITE comulative per Migliorativo.\n")
-    print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
-    print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
+    # dt_imp = time.perf_counter() - t_imp
+    #print("\nStatsitche FINITE comulative per Migliorativo.\n")
+    #print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
+    #print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
 
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0

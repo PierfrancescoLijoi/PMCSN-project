@@ -45,7 +45,22 @@ def set_pc_and_update_probs(pc: float):
 
 
 #---------------------------------------------------------------------------------
+# COME DALLE DISPENSE
+M = 2**31 - 1
+A = 48271  # Lehmer standard delle dispense
 
+def lehmer_replica_seed(root_seed: int, J: int, r: int) -> int:
+    """
+    Seme per la replica r ottenuto con un salto di r*J passi:
+    x_r = (A^(r*J) mod M) * root_seed mod M, in [1, M-1]
+    """
+    if not (1 <= root_seed < M):
+        raise ValueError("root_seed deve essere in [1, M-1]")
+    AJ = pow(A, r * J, M)            # esponenziazione modulare (solo aritmetica intera)
+    s  = (AJ * root_seed) % M
+    return s if s != 0 else 1        # evita lo stato 0
+
+#---------------------------------------------------------------------------------
 def safe_stdev(data, xbar=None):
     """Calcolo della deviazione standard campionaria senza usare statistics.stdev"""
     data = list(map(float, data))  # forza valori float
@@ -112,6 +127,7 @@ def GetArrival(current_time, forced_lambda=None):
     Riferimento: Sezione 'Modello delle specifiche'.
     """
     global arrival_temp
+    selectStream(0)
     lam = forced_lambda if forced_lambda is not None else GetLambda(current_time)
     arrival_temp += Exponential(1 / lam)
     return arrival_temp
@@ -132,27 +148,32 @@ def reset_arrival_temp():
 # -------------------------------
 def GetServiceEdgeE():
     """Servizio per job di classe E all'Edge (Exp(0.5s))"""
+    selectStream(1)
     return Exponential(cs.EDGE_SERVICE_E)
 
 
 def GetServiceEdgeC():
     """Servizio per job di classe C all'Edge (Exp(0.1s))"""
+    selectStream(4)
     return Exponential(cs.EDGE_SERVICE_C)
 
 
 def GetServiceCloud():
     """Servizio al Cloud (Exp(0.8s), infinite-server)"""
+    selectStream(2)
     return Exponential(cs.CLOUD_SERVICE)
 
 
 def GetServiceCoordP1P2():
     """Servizio Coordinator Edge per P1/P2 (Exp(0.25s))"""
+    selectStream(5)
     return Exponential(cs.COORD_SERVICE_P1P2)
 
 
 def GetServiceCoordP3P4():
-    """Servizio Coordinator Edge per P3/P4 (LogNorm(0.4s))"""
-    return LogNormal(cs.COORD_SERVICE_P3P4)
+    """Servizio Coordinator Edge per P3/P4 (Exp(0.4s))"""
+    selectStream(6)
+    return Exponential(cs.COORD_SERVICE_P3P4)
 
 
 # -------------------------------
@@ -224,17 +245,37 @@ def reset_infinite(self):
 # -------------------------------
 # INTERVALLI DI CONFIDENZA
 # -------------------------------
-import numpy as np
-from scipy import stats
-def calculate_confidence_interval(data, confidence=0.95):
-    data = list(map(float, data))  # ← forza i float
-    if len(data) < 2:
-        return 0.0, 0.0  # oppure raise ValueError
 
-    mean = statistics.mean(data)
-    stdev = safe_stdev(data)
-    margin = 1.96 * (stdev / (len(data) ** 0.5))  # z=1.96 per 95%
-    return mean, margin
+def calculate_confidence_interval(data, confidence=0.95):
+    """
+    Restituisce (media, half-width) dell'intervallo di confidenza (1-α) basato su t-Student.
+    Usa s campionaria / sqrt(n) e t_{1-α/2, n-1}.
+    Se SciPy non è disponibile, fa fallback a z (1.96 per 95%).
+    """
+    xs = list(map(float, data))
+    n = len(xs)
+    if n < 2:
+        # Con un solo campione non ha senso un CI: half-width = 0
+        m = xs[0] if n == 1 else 0.0
+        return float(m), 0.0
+
+    m = statistics.mean(xs)
+    s = safe_stdev(xs)  # già campionaria (n-1)
+
+    alpha = 1.0 - float(confidence)
+    df = n - 1
+
+    t_crit = None
+    try:
+        from scipy.stats import t as student_t
+        t_crit = float(student_t.ppf(1.0 - alpha/2.0, df))
+    except Exception:
+        # Fallback: normale standard
+        # 95% -> 1.96; per altri livelli potresti aggiungere una mini-tabella se serve
+        t_crit = 1.96 if abs(confidence - 0.95) < 1e-12 else 1.96
+
+    half_width = t_crit * (s / sqrt(n))
+    return float(m), float(half_width)
 
 
 # -------------------------------

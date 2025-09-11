@@ -5,11 +5,18 @@ from utils.simulation_output import write_file, plot_analysis
 from utils.simulation_stats import SimulationStats, ReplicationStats
 import utils.constants as cs
 from libraries.rngs import plantSeeds, getSeed, selectStream, random as rng_random
+import heapq
+
 
 # Inizializzazione semi randomici
 plantSeeds(cs.SEED)
-
-
+# stream 0 -> external arrival
+# stream 1 -> type E service at Edge node
+# stream 2 -> Cloud server service
+# stream 3 -> routing probability
+# stream 4 -> type C service at Edge node
+# stream 5 -> # stream 6 -> coordinator service for P1-P2
+# stream 6 -> coordinator service for P3-P4
 def finite_simulation(stop, forced_lambda=None):
     """
     Esegue una simulazione fino al tempo 'stop'.
@@ -19,6 +26,8 @@ def finite_simulation(stop, forced_lambda=None):
     reset_arrival_temp()
     stats = SimulationStats()
     stats.reset(cs.START)
+    stats.cloud_heap = []  # min-heap dei tempi di completamento Cloud
+    stats.t.completion_cloud = cs.INFINITY
 
     # Primo arrivo
     stats.t.arrival = GetArrival(stats.t.current, forced_lambda)
@@ -41,6 +50,10 @@ def infinite_simulation(forced_lambda=None):
     batch_stats = ReplicationStats()
     stats = SimulationStats()
     stats.reset(cs.START)
+    stats.cloud_heap = []  # min-heap dei completamenti Cloud (∞-server)
+
+    reset_arrival_temp()  # ← azzera l’orologio degli arrivi
+    stats.t.arrival = GetArrival(stats.t.current, forced_lambda)  # ← primo arrivo > 0
 
     seed = getSeed()
     seeds.append(seed)
@@ -122,20 +135,27 @@ def execute(stats, stop, forced_lambda=None):
     stats.t.current = stats.t.next
 
     # --- Registrazione transiente ogni 1000s (facoltativa/unchanged) ---
-    interval = 1000
-    if int(stats.t.current) % interval == 0:
-        avg_edge  = stats.area_edge.node  / stats.index_edge  if stats.index_edge  > 0 else 0.0
+    interval = 1000.0
+    if not hasattr(stats, "_next_dump"):
+        stats._next_dump = interval
+
+    while stats.t.current >= stats._next_dump:
+        avg_edge = stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0.0
         avg_cloud = stats.area_cloud.node / stats.index_cloud if stats.index_cloud > 0 else 0.0
         avg_coord = stats.area_coord.node / stats.index_coord if stats.index_coord > 0 else 0.0
-        stats.edge_wait_times.append((stats.t.current, avg_edge))
-        stats.cloud_wait_times.append((stats.t.current, avg_cloud))
-        stats.coord_wait_times.append((stats.t.current, avg_coord))
 
-        # Edge per classi (E e C)
+        # Salva il punto a t = _next_dump (x = tempo simulazione)
+        stats.edge_wait_times.append((stats._next_dump, avg_edge))
+        stats.cloud_wait_times.append((stats._next_dump, avg_cloud))
+        stats.coord_wait_times.append((stats._next_dump, avg_coord))
+
+        # Edge per classi
         avg_edge_E = stats.area_E.node / stats.index_edge_E if stats.index_edge_E > 0 else 0.0
         avg_edge_C = stats.area_C.node / stats.index_edge_C if stats.index_edge_C > 0 else 0.0
-        stats.edge_E_wait_times_interval.append((stats.t.current, avg_edge_E))
-        stats.edge_C_wait_times_interval.append((stats.t.current, avg_edge_C))
+        stats.edge_E_wait_times_interval.append((stats._next_dump, avg_edge_E))
+        stats.edge_C_wait_times_interval.append((stats._next_dump, avg_edge_C))
+
+        stats._next_dump += interval
 
     # --- ARRIVAL (arrivo esterno) ---
     if stats.t.current == stats.t.arrival:
@@ -171,12 +191,13 @@ def execute(stats, stop, forced_lambda=None):
                 # routing: Cloud (P_C) oppure Coordinator (1-P_C)
                 r = rng_random()
                 if r < cs.P_C:
-                    # verso Cloud
+                    # verso Cloud (∞-server): ogni job schedula il suo completamento
                     stats.number_cloud += 1
-                    if stats.number_cloud == 1:
-                        service = GetServiceCloud()
-                        stats.t.completion_cloud  = stats.t.current + service
-                        stats.area_cloud.service += service    # SOLO Cloud qui (non toccare area_C!)
+                    service = GetServiceCloud()
+                    completion = stats.t.current + service
+                    heapq.heappush(stats.cloud_heap, completion)
+                    stats.area_cloud.service += service
+                    stats.t.completion_cloud = stats.cloud_heap[0] if stats.cloud_heap else cs.INFINITY
                 else:
                     # verso Coordinator (P1..P4)
                     stats.number_coord += 1
@@ -221,30 +242,26 @@ def execute(stats, stop, forced_lambda=None):
         else:
             stats.t.completion_edge = cs.INFINITY
 
-    # --- CLOUD COMPLETION ---
     elif stats.t.current == stats.t.completion_cloud:
         stats.index_cloud += 1
         stats.number_cloud -= 1
 
-        # se altri job al Cloud, parte il prossimo servizio Cloud
-        if stats.number_cloud > 0:
-            service = GetServiceCloud()
-            stats.t.completion_cloud  = stats.t.current + service
-            stats.area_cloud.service += service   # SOLO Cloud
-        else:
-            stats.t.completion_cloud = cs.INFINITY
+        if stats.cloud_heap and stats.cloud_heap[0] <= stats.t.current + 1e-12:
+            heapq.heappop(stats.cloud_heap)
+
+        stats.t.completion_cloud = stats.cloud_heap[0] if stats.cloud_heap else cs.INFINITY
 
         # ritorno all'Edge come classe C
         stats.number_edge += 1
         stats.queue_edge.append("C")
         stats.number_C += 1
 
-        # se Edge era idle, parte subito un C
         if stats.number_edge == 1:
             service = GetServiceEdgeC()
-            stats.t.completion_edge  = stats.t.current + service
+            stats.t.completion_edge = stats.t.current + service
             stats.area_edge.service += service
-            stats.area_C.service    += service     # quota C all'Edge
+            stats.area_C.service += service
+
 
     # --- COORDINATOR COMPLETION ---
     elif stats.t.current == stats.t.completion_coord:
@@ -281,27 +298,27 @@ def return_stats(stats, t, seed):
 
     # Tempi di risposta medi per centro
     edge_W   = (stats.area_edge.node  / stats.index_edge)  if stats.index_edge  > 0 else 0.0
-    cloud_W  = cs.CLOUD_SERVICE  # ∞-server: tempo medio = servizio
+    cloud_W = (stats.area_cloud.node / stats.index_cloud) if stats.index_cloud > 0 else 0.0
     coord_W  = (stats.area_coord.node / stats.index_coord) if stats.index_coord > 0 else 0.0
 
     # Tempi di coda medi per centro
     edge_Wq  = (stats.area_edge.queue  / stats.index_edge)  if stats.index_edge  > 0 else 0.0
-    cloud_Wq = 0.0
+    cloud_Wq  = (stats.area_cloud.queue / stats.index_cloud) if stats.index_cloud > 0 else 0.0
     coord_Wq = (stats.area_coord.queue / stats.index_coord) if stats.index_coord > 0 else 0.0
 
     # L e Lq
     edge_L   = (stats.area_edge.node  / t) if t > 0 else 0.0
-    cloud_L  = (stats.index_cloud / t) * cs.CLOUD_SERVICE
+    cloud_L = (stats.area_cloud.node / t) if t > 0 else 0.0
     coord_L  = (stats.area_coord.node / t) if t > 0 else 0.0
 
     edge_Lq  = (stats.area_edge.queue  / t) if t > 0 else 0.0
-    cloud_Lq = 0.0
+    cloud_Lq = (stats.area_cloud.queue / t) if t > 0 else 0.0
     coord_Lq = (stats.area_coord.queue / t) if t > 0 else 0.0
 
     # Utilizzazioni
     edge_util  = (stats.area_edge.service  / t) if t > 0 else 0.0   # ∈ [0,1]
     coord_util = (stats.area_coord.service / t) if t > 0 else 0.0   # ∈ [0,1]
-    cloud_busy = (stats.index_cloud / t) * cs.CLOUD_SERVICE if t > 0 else 0.0
+    cloud_busy = cloud_L  # ∞-server: busy servers medi = L
 
     # Throughput
     X_edge   = (stats.index_edge  / t) if t > 0 else 0.0
