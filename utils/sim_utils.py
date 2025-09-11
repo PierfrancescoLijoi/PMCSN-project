@@ -198,49 +198,57 @@ def remove_batch(stats, n, renumber_batches=True):
 
 
 def reset_infinite(self):
-    """
-    Reset delle statistiche per la simulazione a orizzonte infinito (batch-means).
-    Non resetta il tempo globale, ma azzera contatori e aree accumulate nel batch.
-    """
-    # contatori arrivi/completamenti
-    self.job_arrived = 0
+        """
+        Reset per la simulazione a orizzonte infinito (batch-means).
+        Azzera SOLO contatori e aree del batch corrente.
+        NON svuota code, NON azzera numeri in sistema, NON cambia i completion in corso.
+        """
 
-    self.index_edge = 0
-    self.index_cloud = 0
-    self.index_coord = 0
+        # --- Contatori batch (arrivi/completamenti) ---
+        self.job_arrived = 0
 
-    self.count_E = 0
-    self.count_C = 0
+        self.index_edge = 0
+        self.index_cloud = 0
+        self.index_coord = 0
 
-    self.count_E_P1 = 0
-    self.count_E_P2 = 0
-    self.count_E_P3 = 0
-    self.count_E_P4 = 0
+        # Breakdown Edge per classi (E/C) – solo contatori del batch
+        self.index_edge_E = 0
+        self.index_edge_C = 0
 
-    self.index_E = 0
-    self.index_C = 0
+        self.count_E = 0
+        self.count_C = 0
+        self.count_E_P1 = 0
+        self.count_E_P2 = 0
+        self.count_E_P3 = 0
+        self.count_E_P4 = 0
 
-    # aree accumulate (batch corrente)
-    self.area_edge = Track()
-    self.area_cloud = Track()
-    self.area_coord = Track()
-    self.area_E = Track()
-    self.area_C = Track()
+        # --- Aree accumulate nel batch ---
+        self.area_edge = Track()
+        self.area_cloud = Track()
+        self.area_coord = Track()
+        self.area_E = Track()
+        self.area_C = Track()
 
-    # code: svuotiamo per garantire indipendenza tra batch
-    self.queue_edge = []
-    self.queue_coord_low = []
-    self.queue_coord_high = []
+        # code: svuotiamo per garantire indipendenza tra batch
+        self.queue_edge = []
+        self.queue_coord_low = []
+        self.queue_coord_high = []
 
-    # numero di job in servizio/attesa
-    self.number_edge = 0
-    self.number_cloud = 0
-    self.number_coord = 0
+        # numeri di job in servizio/attesa
+        self.number_edge = 0
+        self.number_cloud = 0
+        self.number_coord = 0
 
-    # tempi di completamento (nessun job in corso)
-    self.t.completion_edge = cs.INFINITY
-    self.t.completion_cloud = cs.INFINITY
-    self.t.completion_coord = cs.INFINITY
+        self.number_E = 0  #
+        self.number_C = 0
+
+        self.index_edge_E = 0
+        self.index_edge_C = 0
+
+        # completamenti a ∞
+        self.t.completion_edge = cs.INFINITY
+        self.t.completion_cloud = cs.INFINITY
+        self.t.completion_coord = cs.INFINITY
 
 # -------------------------------
 # INTERVALLI DI CONFIDENZA
@@ -344,12 +352,13 @@ def append_stats_improved(replicationStats, results, stats):
     replicationStats.seeds.append(results['seed'])
     replicationStats.lambdas.append(results.get('lambda'))
     replicationStats.slots.append(results.get('slot'))
-
+    replicationStats.feedback_wait_times.append(stats.feedback_wait_times)
     # --- Tempi di risposta (usa Edge_NuoviArrivi come 'edge') ---
     replicationStats.edge_wait_times.append(results['edge_NuoviArrivi_avg_wait'])
     replicationStats.cloud_wait_times.append(results['cloud_avg_wait'])
     replicationStats.coord_wait_times.append(results['coord_avg_wait'])
-
+    # NEW: aggiungi anche le serie del feedback
+    replicationStats.feedback_wait_times.append(stats.feedback_wait_times)
     # --- Tempi di attesa/risposta per job di classe E (legacy dal tuo modello) ---
     replicationStats.edge_E_delay_times.append(results['edge_E_avg_delay'])
     replicationStats.edge_E_response_times.append(results['edge_E_avg_response'])

@@ -18,6 +18,9 @@ from utils import constants as cs
 from utils.sim_utils import calculate_confidence_interval
 from datetime import datetime
 import json
+import pandas as pd
+import matplotlib.pyplot as plt
+from pathlib import Path
 # Directory di output
 file_path_improved = "output_improved/"
 
@@ -497,15 +500,7 @@ def clear_coord_scalability_file_improved(file_name):
 
 # ---------------------------- PLOT FOR INFINITE SIMULATIONS -------------------------------
 def plot_infinite_analysis_improved():
-    """
-    Grafici per l'analisi a orizzonte infinito:
-    - Nodi (Edge/Cloud/Coordinator): x = batch, linee per ciascun λ reale
-    - Curva Edge response time vs λ con punti per slot e linea QoS = 3s
-    Salva tutto in output/plot/orizzonte infinito
-    """
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    from pathlib import Path
+
 
     out_dir = Path(file_path_improved)
     csv_path = out_dir / "infinite_statistics.csv"
@@ -552,7 +547,9 @@ def plot_infinite_analysis_improved():
         plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
         plt.close()
 
-
+    plot_node_by_lambda("edge_NuoviArrivi_avg_wait",
+                        "Nodo Edge: tempo di risposta per batch (linee per λ)",
+                        "infinite_edge_response_vs_batch_per_lambda.png")
     plot_node_by_lambda("cloud_avg_wait",
                         "Nodo Cloud: tempo di risposta per batch (linee per λ)",
                         "infinite_cloud_response_vs_batch_per_lambda.png")
@@ -574,21 +571,23 @@ def plot_infinite_analysis_improved():
     plt.figure()
     # Curva media globale (λ -> W_edge)
     if not agg_lambda_global.empty:
-        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_NuoviArrivi_avg_wait"], marker="o", color="blue")
+        plt.plot(agg_lambda_global["lambda"], agg_lambda_global["edge_NuoviArrivi_avg_wait"],
+                 marker="o", color="blue")
     # Punti per slot
     for slot, g in agg_lambda_slot.groupby("slot"):
         if not g.empty:
             plt.scatter(g["lambda"], g["edge_NuoviArrivi_avg_wait"], label=f"Slot {slot}")
             for _, r in g.iterrows():
-                plt.annotate(f"{r['lambda']:.5f}", (r["lambda"], r["edge_NuoviArrivi_avg_wait"]),
+                plt.annotate(f"{r['lambda']:.5f}",
+                             (r["lambda"], r["edge_NuoviArrivi_avg_wait"]),
                              textcoords="offset points", xytext=(0, 6),
                              ha="center", fontsize=8)
     # Linea QoS
     plt.axhline(y=qos_seconds, linestyle="--", color="r", linewidth=1.2,
                 label=f"QoS = {qos_seconds:.0f}s")
     plt.xlabel("λ (arrivi/secondo)")
-    plt.ylabel("Tempo medio di risposta Edge_NuoviArrivi (s)")
-    plt.title("Tempo di risposta Edge_NuoviArrivi vs λ (con QoS = 3s)")
+    plt.ylabel("Tempo medio di risposta Edge (s)")
+    plt.title("Tempo di risposta Edge rispetto a λ (con QoS = 3s)")
     plt.legend()
     plt.grid(True)
     plt.savefig(plot_dir / "infinite_edge_response_vs_lambda_with_qos.png",
@@ -596,95 +595,3 @@ def plot_infinite_analysis_improved():
     plt.close()
 
 
-
-def plot_edge_response_vs_pc(csv_path: str,
-                             out_path: str | None = None,
-                             response_col: str | None = None) -> str:
-    """
-    Crea un grafico del tempo di risposta dell'Edge (Nuovi Arrivi) al variare di p_c,
-    disegnando UNA linea per ciascun λ presente nel CSV.
-
-    Parametri:
-      - csv_path    : percorso del CSV (es. "output_improved/merged_scalability_statistics.csv").
-      - out_path    : (opzionale) percorso file immagine di output (.png). Se None, salva in
-                      <dir del csv>/plot/edge_response_vs_pc.png
-      - response_col: (opzionale) nome colonna del tempo di risposta da usare.
-                      Se None, prova in ordine:
-                        "edge_NuoviArrivi_avg_wait" (improved) oppure "edge_avg_wait" (standard).
-
-    Ritorna:
-      - percorso del file PNG generato.
-    """
-    import os
-    import pandas as pd
-    import matplotlib.pyplot as plt
-
-    if not os.path.exists(csv_path):
-        raise FileNotFoundError(f"CSV not found: {csv_path}")
-
-    df = pd.read_csv(csv_path)
-    if df.empty:
-        raise ValueError(f"Nessun dato in {csv_path}")
-
-    # Normalizza i nomi colonna (spazi ecc.)
-    df.columns = [str(c).strip() for c in df.columns]
-
-    # Determina la colonna risposta da usare
-    resp = response_col
-    if resp is None:
-        if "edge_NuoviArrivi_avg_wait" in df.columns:
-            resp = "edge_NuoviArrivi_avg_wait"
-        elif "edge_avg_wait" in df.columns:
-            resp = "edge_avg_wait"
-        else:
-            raise ValueError(
-                "Colonna tempo di risposta non trovata. Attese: "
-                "'edge_NuoviArrivi_avg_wait' o 'edge_avg_wait'."
-            )
-
-    # Colonne richieste
-    required = {"pc", "lambda", resp}
-    missing = [c for c in required if c not in df.columns]
-    if missing:
-        raise ValueError(f"Mancano colonne nel CSV: {missing}")
-
-    # Cast numerico e drop NA
-    for col in ["pc", "lambda", resp]:
-        df[col] = pd.to_numeric(df[col], errors="coerce")
-    df = df.dropna(subset=["pc", "lambda", resp])
-
-    if df.empty:
-        raise ValueError("Dati insufficienti dopo la pulizia per 'pc', 'lambda' e risposta.")
-
-    # Aggrega per (lambda, pc) nel caso di più repliche/righe per combinazione
-    agg = (
-        df.groupby(["lambda", "pc"], as_index=False)[resp]
-          .mean()
-          .rename(columns={resp: "response"})
-          .sort_values(["lambda", "pc"])
-    )
-
-    # Prepara cartella output se non fornita
-    if out_path is None:
-        base_dir = os.path.dirname(os.path.abspath(csv_path))
-        out_dir = os.path.join(base_dir, "plot")
-        os.makedirs(out_dir, exist_ok=True)
-        out_path = os.path.join(out_dir, "edge_response_vs_pc.png")
-    else:
-        os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
-
-    # Plot: una linea per ciascun λ
-    plt.figure()
-    for lam, g in agg.groupby("lambda"):
-        plt.plot(g["pc"], g["response"], label=f"λ={lam}")
-
-    plt.xlabel("p_c")
-    plt.ylabel("Tempo di risposta Edge (W)")
-    plt.title("Edge (Nuovi Arrivi): tempo di risposta vs p_c — una linea per λ")
-    plt.legend(title="λ")
-    plt.tight_layout()
-    plt.savefig(out_path, dpi=150)
-    plt.close()
-
-    print(f"[plot_edge_response_vs_pc] Grafico salvato in: {out_path}")
-    return out_path

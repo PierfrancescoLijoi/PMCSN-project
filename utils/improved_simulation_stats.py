@@ -65,6 +65,7 @@ class SimulationStats_improved:
         self.area_feedback = Track()
         self.queue_feedback = []
         self.index_feedback = 0
+        self.feedback_wait_times = []
 
     def reset(self, start_time):
         self.t.current = start_time
@@ -83,18 +84,25 @@ class SimulationStats_improved:
         self.number_feedback = 0
         self.area_feedback = Track()
         self.queue_feedback = []
+        self.cloud_comp = []
 
     def reset_infinite(self):
         """
         Reset delle statistiche per la simulazione a orizzonte infinito (batch-means).
-        Non resetta il tempo globale, ma azzera contatori e aree accumulate nel batch.
+        NON resetta lo stato del sistema né i tempi di completamento in corso.
+        Azzera SOLO contatori e aree accumulate nel batch corrente.
         """
-        # contatori arrivi/completamenti
+
+        # --- Contatori batch: arrivi/completamenti misurati nel batch ---
         self.job_arrived = 0
 
         self.index_edge = 0
         self.index_cloud = 0
         self.index_coord = 0
+        self.index_feedback = 0
+
+        self.index_E = 0
+        self.index_C = 0
 
         self.count_E = 0
         self.count_C = 0
@@ -104,35 +112,24 @@ class SimulationStats_improved:
         self.count_E_P3 = 0
         self.count_E_P4 = 0
 
-        self.index_E = 0
-        self.index_C = 0
-
-        # aree accumulate (batch corrente)
+        # --- Aree batch (integrali su node/queue/service) ---
         self.area_edge = Track()
         self.area_cloud = Track()
         self.area_coord = Track()
+
+        # Se tieni il breakdown per classe, azzera solo le aree (non lo stato)
         self.area_E = Track()
         self.area_C = Track()
-        # feedback (batch corrente)
-        self.index_feedback = 0
-        self.number_feedback = 0
+
+        # --- Feedback (solo metriche batch) ---
+        # NON toccare self.number_feedback, self.queue_feedback, né completion_feedback
         self.area_feedback = Track()
-        self.queue_feedback = []
-        self.t.completion_feedback = cs.INFINITY
-        # code: svuotiamo per garantire indipendenza tra batch
-        self.queue_edge = []
-        self.queue_coord_low = []
-        self.queue_coord_high = []
 
-        # numero di job in servizio/attesa
-        self.number_edge = 0
-        self.number_cloud = 0
-        self.number_coord = 0
-
-        # tempi di completamento (nessun job in corso)
-        self.t.completion_edge = cs.INFINITY
-        self.t.completion_cloud = cs.INFINITY
-        self.t.completion_coord = cs.INFINITY
+        # === IMPORTANTISSIMO: NON toccare lo stato del sistema! ===
+        # - NON svuotare le code: self.queue_edge, self.queue_coord_low, self.queue_coord_high, self.queue_feedback
+        # - NON azzerare i numeri in sistema: self.number_edge, self.number_cloud, self.number_coord, self.number_feedback
+        # - NON resettare i completamenti: self.t.completion_edge/cloud/coord/feedback
+        # - NON toccare liste di completamenti/occupazioni: self.edge_comp, self.edge_busy, self.cloud_comp, ecc.
 
     def calculate_area_queue(self):
         self.area_edge.queue = self.area_edge.node - self.area_edge.service
@@ -148,7 +145,7 @@ class ReplicationStats_improved:
         self.seeds = []
         self.lambdas = []
         self.slots = []
-
+        self.feedback_wait_times = []
         # tempi medi attesa e risposta classe E
         self.edge_E_delay_times = []
         self.edge_E_response_times = []
