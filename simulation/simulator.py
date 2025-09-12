@@ -137,7 +137,7 @@ def execute(stats, stop, forced_lambda=None):
     # --- Registrazione transiente ogni 1000s (facoltativa/unchanged) ---
     interval = 1000.0
     if not hasattr(stats, "_next_dump"):
-        stats._next_dump = interval
+        stats._next_dump = 0.0
 
     while stats.t.current >= stats._next_dump:
         avg_edge = stats.area_edge.node / stats.index_edge if stats.index_edge > 0 else 0.0
