@@ -243,6 +243,7 @@ def execute(stats, stop, forced_lambda=None):
         else:
             stats.t.completion_edge = cs.INFINITY
 
+    # CLOUD COMPLETION
     elif stats.t.current == stats.t.completion_cloud:
         stats.index_cloud += 1
         stats.number_cloud -= 1

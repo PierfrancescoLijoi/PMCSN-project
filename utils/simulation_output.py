@@ -12,6 +12,7 @@ del documento PMCSN Project (Luglio 2025).
 import csv
 import statistics
 import os
+from pathlib import Path
 from typing import List, Tuple, Dict, Any, Union
 
 import matplotlib.pyplot as plt
@@ -389,7 +390,7 @@ def print_simulation_stats(stats, sim_type):
 
 
 # utils/simulation_output.py
-def plot_analysis(series, seeds, name, sim_type="finite_fixed_lambda"):
+def plot_analysis(series, name, sim_type="finite_fixed_lambda"):
     """
     Traccia 1 curva per replica.
     - series: [[(t,y), ...], [(t,y), ...], ...]  (oppure una singola [(t,y), ...])
@@ -507,136 +508,147 @@ def plot_multi_seed_per_lambda(
                   ylabel_override="Average response time (s)")
 
 
-
-
-# ---------------------------- PLOT FOR INFINITE SIMULATIONS -------------------------------
 def plot_infinite_analysis():
     """
-    Grafici per l'analisi a orizzonte infinito:
-    - Nodi (Edge/Cloud/Coordinator): x = batch, linee per ciascun λ reale
-    - Curva Edge response time vs λ con punti per slot e linea QoS = 3s
-    Salva tutto in output/plot/orizzonte infinito
+    Grafici orizzonte infinito:
+    - usa SEMPRE output/infinite_statistics.csv
+    - mostra SOLO la media cumulata per batch
+    - include anche Edge_E e Edge_C (tempo di risposta)
+    - nomi file senza '_like_ref'
     """
+    from pathlib import Path
     import pandas as pd
     import matplotlib.pyplot as plt
-    from pathlib import Path
 
-    out_dir = Path(file_path)
-    csv_path = out_dir / "infinite_statistics.csv"
+    # === CSV fisso corretto ===
+    csv_path = Path("output") / "infinite_statistics.csv"
     if not csv_path.exists():
         print(f"[plot_infinite_analysis] File non trovato: {csv_path}")
         return
 
     df = pd.read_csv(csv_path)
     if df.empty:
-        print("[plot_infinite_analysis] Nessun dato in infinite_statistics.csv")
+        print(f"[plot_infinite_analysis] CSV vuoto: {csv_path}")
         return
 
-    # Assicura la colonna 'batch'
-    if 'batch' not in df.columns:
-        df = df.sort_values(["slot", "lambda"]).copy()
-        df['batch'] = df.groupby(["slot", "lambda"]).cumcount()
-    else:
-        df = df.sort_values(["lambda", "batch"]).copy()
+    if "batch" not in df.columns:
+        df = df.copy()
+        df["batch"] = range(len(df))
 
+    # Media per batch, ordinata
+    per_batch = (
+        df.groupby("batch", as_index=False)
+          .mean(numeric_only=True)
+          .sort_values("batch")
+          .reset_index(drop=True)
+    )
+
+    out_dir = csv_path.parent
     plot_dir = out_dir / "plot" / "orizzonte infinito"
     plot_dir.mkdir(parents=True, exist_ok=True)
 
-    # ---------- 1) Nodi: x = batch, linee per ciascun λ reale ----------
-    agg_lam_batch = df.groupby(["lambda", "batch"], as_index=False).agg({
-        "edge_avg_wait": "mean",
-        "cloud_avg_wait": "mean",
-        "coord_avg_wait": "mean",
-    })
-
-    # --- Batch-means cumulative plots (Edge/Cloud/Coord) ---
-
-    # Batch numerico e pulizia robusta
-    df["batch"] = pd.to_numeric(df["batch"], errors="coerce")
-    df = df.dropna(subset=["batch"]).copy()
-    df["batch"] = df["batch"].astype(int)
-
-    def _running_mean(y):
-        s = pd.to_numeric(y, errors='coerce').fillna(0)
+    # ---------- helpers ----------
+    def _cum(y):
+        s = pd.Series(y).reset_index(drop=True)
         return s.expanding().mean()
 
-    def plot_node_by_lambda(ycol, title, fname):
-        plt.figure()
-        any_line = False
-        groups = list(df.sort_values(["slot", "lambda", "batch"]).groupby(["slot", "lambda"]))
-        for (slot_val, lam_val), g in groups:
-            if g.empty:
-                continue
-            rm = _running_mean(g[ycol])
-            lab = f"λ={lam_val:.5f}" if df["slot"].nunique() == 1 else f"Slot {slot_val} — λ={lam_val:.5f}"
-            plt.plot(g["batch"], rm, label=lab)
-            any_line = True
+    def _ensure_col_from_df(ycol: str):
+        """Se ycol non è in per_batch ma esiste in df, porta la media per batch in per_batch[ycol]."""
+        nonlocal per_batch
+        if ycol in per_batch.columns:
+            return True
+        if ycol not in df.columns:
+            return False
+        tmp = df.groupby("batch", as_index=False)[ycol].mean().rename(columns={ycol: f"__tmp_{ycol}"})
+        per_batch = per_batch.merge(tmp, on="batch", how="left")
+        per_batch[ycol] = per_batch[f"__tmp_{ycol}"]
+        per_batch.drop(columns=[f"__tmp_{ycol}"], inplace=True)
+        return True
+
+    def _plot_cum(ycol: str, title: str, fname: str, ylabel: str = "valore medio (media cumulata)"):
+        # porta la colonna in per_batch se serve
+        if ycol not in per_batch.columns:
+            if not _ensure_col_from_df(ycol):
+                print(f"[plot_infinite_analysis] Colonna assente: {ycol}")
+                return
+
+        # media cumulata
+        y_mean = _cum(per_batch[ycol])  # len = N
+
+        # --- PICCO VISIBILE DA ZERO ---
+        # Prependiamo un punto iniziale (x=0, y=0) e poi i punti (1..N, media cumulata)
+        x = [0] + list(range(1, len(y_mean) + 1))
+        y = [0.0] + y_mean.tolist()
+
+        # plot SOLO cumulata
+        plt.figure(figsize=(10, 5))
+        plt.plot(x, y, linewidth=1.6)
+
+        # stile come da richiesta
+        plt.grid(True, alpha=0.3)
         plt.xlabel("Batch")
-        plt.ylabel("Wait time (media cumulata) [s]")
-        plt.title(title + " — media cumulata")
-        if any_line and len(groups) > 1:
-            plt.legend()
-        plt.grid(True)
-        plt.savefig(plot_dir / fname, dpi=150, bbox_inches="tight")
+        plt.ylabel(ylabel)
+        plt.title(title)
+
+        # spazio a sinistra + clamp a 0
+        plt.xlim(left=-1)  # un po' di spazio per far vedere il salto
+        plt.ylim(bottom=0)
+
+        plt.legend()
+        plt.tight_layout()
+        out_path = plot_dir / fname
+        plt.savefig(out_path, dpi=150, bbox_inches="tight")
         plt.close()
+        print(f"[plot_infinite_analysis] Grafico salvato: {out_path}")
 
-    plot_node_by_lambda(
-        "edge_avg_wait",
-        "Nodo Edge: wait time medio per batch",
-        "infinite_edge_wait_vs_batch_per_lambda.png"
+    # ---------- grafici principali (media cumulata) ----------
+    _plot_cum("edge_avg_wait",  "Edge node",        "infinite_edge_wait.png",  "Tempo di attesa [s]")
+    _plot_cum("cloud_avg_wait", "Cloud node ",       "infinite_cloud_wait.png", "Tempo di attesa [s]")
+    _plot_cum("coord_avg_wait", "Coordinator node", "infinite_coord_wait.png", "Tempo di attesa [s]")
+
+    # ---------- Edge_E / Edge_C: tempo di risposta ----------
+    # Preferiamo *_avg_response; se non c'è, costruiamo response = avg_delay + edge_service_time_mean
+    def _ensure_response(col_resp: str, col_delay: str, svc_candidates: list[str]):
+        # già presente?
+        if col_resp in per_batch.columns or col_resp in df.columns:
+            _ensure_col_from_df(col_resp)
+            return col_resp
+        # ricostruzione da delay + service
+        if _ensure_col_from_df(col_delay):
+            svc_col = None
+            for c in svc_candidates:
+                if _ensure_col_from_df(c):
+                    svc_col = c
+                    break
+            if svc_col:
+                per_batch[col_resp] = per_batch[col_delay] + per_batch[svc_col]
+                return col_resp
+        return None
+
+    e_resp = _ensure_response(
+        col_resp="edge_E_avg_response",
+        col_delay="edge_E_avg_delay",
+        svc_candidates=["edge_E_service_time_mean", "edge_service_time_mean"]
     )
-    plot_node_by_lambda(
-        "cloud_avg_wait",
-        "Nodo Cloud: wait time medio per batch",
-        "infinite_cloud_wait_vs_batch_per_lambda.png"
-    )
-    plot_node_by_lambda(
-        "coord_avg_wait",
-        "Nodo Coordinator: wait time medio per batch",
-        "infinite_coord_wait_vs_batch_per_lambda.png"
+    c_resp = _ensure_response(
+        col_resp="edge_C_avg_response",
+        col_delay="edge_C_avg_delay",
+        svc_candidates=["edge_C_service_time_mean", "edge_service_time_mean"]
     )
 
-    # ---------- 2) Curva Edge wait time vs λ con punti per slot + QoS ----------
-    agg_lambda_global = df.groupby("lambda", as_index=False).agg({
-        "edge_avg_wait": "mean"
-    }).sort_values("lambda")
+    if e_resp:
+        _plot_cum(e_resp, "Edge_E", "infinite_edge_E_wait.png", "Tempo di risposta [s]")
+    else:
+        print("[plot_infinite_analysis] impossibile plottare Edge_E (manca response o delay+service).")
 
-    agg_lambda_slot = df.groupby(["slot", "lambda"], as_index=False).agg({
-        "edge_avg_wait": "mean"
-    }).sort_values(["lambda", "slot"])
+    if c_resp:
+        _plot_cum(c_resp, "Edge_C", "infinite_edge_C_wait.png", "Tempo di risposta [s]")
+    else:
+        print("[plot_infinite_analysis] impossibile plottare Edge_C (manca response o delay+service).")
 
-    qos_seconds = 3.0  # QoS richiesto = 3s
+    print(f"[plot_infinite_analysis] CSV usato: {csv_path.resolve()}")
+    print(f"[plot_infinite_analysis] Output dir: {plot_dir.resolve()}")
 
-    plt.figure()
-    # Curva media globale (λ -> W_edge)
-    if not agg_lambda_global.empty:
-        plt.plot(
-            agg_lambda_global["lambda"],
-            agg_lambda_global["edge_avg_wait"],
-            marker="o"
-        )
-    # Punti per slot
-    for slot, g in agg_lambda_slot.groupby("slot"):
-        if not g.empty:
-            plt.scatter(g["lambda"], g["edge_avg_wait"], label=f"Slot {slot}")
-            for _, r in g.iterrows():
-                plt.annotate(
-                    f"{r['lambda']:.5f}",
-                    (r["lambda"], r["edge_avg_wait"]),
-                    textcoords="offset points",
-                    xytext=(0, 6),
-                    ha="center",
-                    fontsize=8
-                )
-    # Linea QoS
-    plt.axhline(y=qos_seconds, linestyle="--", linewidth=1.2, label=f"QoS = {qos_seconds:.0f}s")
-    plt.xlabel("λ (arrivi/secondo)")
-    plt.ylabel("Tempo medio di attesa Edge (s)")
-    plt.title("Wait time Edge rispetto a λ (con QoS = 3s)")
-    plt.legend()
-    plt.grid(True)
-    plt.savefig(plot_dir / "infinite_edge_wait_vs_lambda_with_qos.png", dpi=150, bbox_inches="tight")
-    plt.close()
 
 
 def plot_transient_with_seeds(series, seeds, name, sim_type="finite_fixed_lambda"):

@@ -9,29 +9,21 @@ La simulazione segue un approccio next-event-driven con orizzonte finito
 (transiente), come definito a pagina 8–10 del testo allegato.
 """
 import os
-import pandas as pd
-import utils.constants as cs
 import time
-
 from datetime import datetime, timedelta
+
+import pandas as pd
 from matplotlib import pyplot as plt
+
+import utils.constants as cs
+from libraries.rngs import plantSeeds, getSeed
 from simulation.edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
-from utils.simulation_output import write_file, clear_file, print_simulation_stats, plot_multi_seed_per_lambda, \
-    write_infinite_row, write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
-    plot_infinite_analysis, plot_edge_response_vs_pc, plot_analysis, plot_transient_with_seeds
+from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, lehmer_replica_seed
+from utils.simulation_output import write_file, clear_file, print_simulation_stats, write_infinite_row, \
+    write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
+    plot_infinite_analysis, plot_analysis, plot_transient_with_seeds
 from utils.simulation_stats import ReplicationStats
-from simulation.improved_edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation_improved
-from simulation.improved_simulator import finite_simulation_improved, infinite_simulation_improved
-from utils.improved_simulation_output import write_file_improved, clear_file_improved, print_simulation_stats_improved, \
-    plot_multi_seed_per_lambda_improved, \
-    write_infinite_row_improved, write_file_merged_scalability_improved, clear_merged_scalability_file_improved, \
-    clear_infinite_file_improved, plot_infinite_analysis_improved
-from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, append_stats_improved, \
-    lehmer_replica_seed
-from utils.improved_simulation_stats import ReplicationStats_improved
-from libraries.rngs import plantSeeds, getSeed
-
 
 
 def start_finite_simulation():
@@ -69,11 +61,12 @@ def start_finite_simulation():
 
     # === Grafici transiente: SEMPRE con wait_times (serie [(t, W)]) ===
     # Una curva per replica, x = tempo simulazione (s), y = tempo medio di risposta
-    plot_analysis(replicationStats.edge_wait_interval,  replicationStats.seeds, "edge_node",               sim_type="finite_fixed_lambda")
-    plot_analysis(replicationStats.edge_E_wait_interval, replicationStats.seeds, "edge_node_E",
+    plot_analysis(replicationStats.edge_wait_interval, "edge_node",               sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.edge_E_wait_interval, "edge_node_E",
                   sim_type="finite_fixed_lambda")
-    plot_analysis(replicationStats.cloud_wait_interval, replicationStats.seeds, "cloud_node",              sim_type="finite_fixed_lambda")
-    plot_analysis(replicationStats.coord_wait_interval, replicationStats.seeds, "coordinator_server_edge", sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.edge_C_wait_interval, "edge_node_C", sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.cloud_wait_interval, "cloud_node",              sim_type="finite_fixed_lambda")
+    plot_analysis(replicationStats.coord_wait_interval, "coordinator_server_edge", sim_type="finite_fixed_lambda")
 
     return replicationStats
 
@@ -194,9 +187,13 @@ def start_scalability_simulation():
             print(f"  ★ Replica {rep + 1}")
             seed = lehmer_replica_seed(cs.SEED, J_REP, rep)  # seed indipendente per replica
             plantSeeds(seed)  # imposta gli stream RNG
+            # resettiamo il numero di server ogni replica
+            cs.EDGE_SERVERS = int(getattr(cs, "EDGE_SERVERS_INIT", 1))
+            cs.COORD_EDGE_SERVERS = int(getattr(cs, "COORD_EDGE_SERVERS_INIT", 1))
 
             edge_wait_this_rep, coord_wait_this_rep, cloud_wait_this_rep = [], [], []
-            t_trace, edge_trace, coord_trace = [], [], []
+            t_trace_edge, edge_trace = [], []
+            t_trace_coord, coord_trace = [], []
             t_offset = 0.0
             last_edge_count, last_coord_count = None, None
 
@@ -220,7 +217,7 @@ def start_scalability_simulation():
 
                 for (t_rel, s, _) in res.get("edge_scal_trace", []):
                     t_abs = t_offset + t_rel
-                    t_trace.append(t_abs)
+                    t_trace_edge.append(t_abs)
                     edge_trace.append(s)
                     if last_edge_count is None:
                         last_edge_count = s
@@ -231,6 +228,7 @@ def start_scalability_simulation():
 
                 for (t_rel, s, _) in res.get("coord_scal_trace", []):
                     t_abs = t_offset + t_rel
+                    t_trace_coord.append(t_abs)
                     coord_trace.append(s)
                     if last_coord_count is None:
                         last_coord_count = s
@@ -248,8 +246,8 @@ def start_scalability_simulation():
             if cloud_wait_this_rep:
                 rep_cloud_wait_means.append(sum(cloud_wait_this_rep) / len(cloud_wait_this_rep))
 
-            rep_traces_edge.append(list(zip(t_trace, edge_trace)))
-            rep_traces_coord.append(list(zip(t_trace[:len(coord_trace)], coord_trace)))
+            rep_traces_edge.append(list(zip(t_trace_edge, edge_trace)))
+            rep_traces_coord.append(list(zip(t_trace_coord, coord_trace)))
 
         grid = [i * decision_interval for i in range(int(horizon / decision_interval) + 1)]
 
@@ -279,13 +277,49 @@ def start_scalability_simulation():
             mode_edge.append(modal_value(vals_e) if vals_e else 1)
             mode_coord.append(modal_value(vals_c) if vals_c else 1)
 
-        plt.figure()
-        plt.step(grid, mode_edge, where="post", label="Edge servers (moda repliche)")
-        plt.step(grid, mode_coord, where="post", label="Coordinator servers (moda repliche)")
-        plt.xlabel("Tempo")
+        # --- PLOT: server nel tempo (moda sulle repliche) ---
+        plt.figure(figsize=(10, 5))
+        me = max(1, len(grid) // 24)  # marker non troppo fitti
+
+        # Edge: linea piena (steps-post)
+        edge_line, = plt.plot(
+            grid, mode_edge,
+            drawstyle="steps-post",
+            linewidth=2.4,
+            alpha=0.95,
+            label="Edge (moda repliche)"
+        )
+
+        # Coordinator: tratteggiata + marker, con z-order più alto
+        coord_line, = plt.plot(
+            grid, mode_coord,
+            drawstyle="steps-post",
+            linestyle="--",
+            linewidth=2.0,
+            alpha=0.95,
+            marker="o",
+            markersize=3,
+            markevery=me,
+            label="Coordinator (moda repliche)"
+        )
+        coord_line.set_zorder(3)
+        edge_line.set_zorder(2)
+
+        # Assi, tick e griglia
+        if mode_edge and mode_coord:
+            ymin = min(min(mode_edge), min(mode_coord))
+            ymax = max(max(mode_edge), max(mode_coord))
+            try:
+                plt.yticks(range(int(ymin), int(ymax) + 1))
+            except ValueError:
+                pass
+
+        plt.xlabel("Tempo [s]")
         plt.ylabel("Numero server")
         plt.title(f"Andamento server nel tempo – pc={pc:.2f} (moda su {cs.REPLICATIONS} repliche)")
-        plt.legend()
+        plt.grid(True, which="both", alpha=0.3)
+        plt.legend(loc="best", frameon=False)
+
         fig_path = os.path.join(output_dir, f"servers_over_time_pc_{str(pc).replace('.', '_')}.png")
         plt.savefig(fig_path, dpi=150, bbox_inches="tight")
         plt.close()
@@ -426,252 +460,6 @@ def print_csv_legend():
 
     for name, desc in legend.items():
         print(f"{name:30} -> {desc}")
-
-
-def improved_start_lambda_scan_simulation():
-    replicationStats = ReplicationStats_improved()
-    print("LAMBDA SCAN SIMULATION - Aeroporto Ciampino")
-
-    file_name = "finite_statistics.csv"
-    clear_file_improved(file_name)  # header 'finito' OK
-
-    # Repliche
-    for rep in range(cs.REPLICATIONS):
-        plantSeeds(cs.SEED + rep)
-        base_seed = getSeed()
-        print(f"\n★ Replica {rep+1} con seed base = {base_seed}")
-
-        # Tutti gli slot λ
-        for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-            print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec (Replica {rep+1})")
-
-            stop = cs.SLOT_DURATION
-            results, stats = finite_simulation_improved(stop, forced_lambda=lam)
-
-            results['lambda'] = lam
-            results['slot'] = lam_index
-            results['seed'] = base_seed
-            write_file_improved(results, file_name)
-
-            # ⬇️ questa usa i nuovi nomi edge_NuoviArrivi_* (vedi sim_utils)
-            append_stats_improved(replicationStats, results, stats)
-
-    print_simulation_stats_improved(replicationStats, "lambda_scan")
-
-    if cs.TRANSIENT_ANALYSIS == 1:
-
-        # Analisi per λ
-        plot_multi_seed_per_lambda_improved(
-            replicationStats.edge_wait_interval,
-            replicationStats.seeds,
-            "edge_node", "lambda_scan",
-            replicationStats.lambdas,
-            replicationStats.slots
-        )
-        plot_multi_seed_per_lambda_improved(
-            replicationStats.cloud_wait_interval,
-            replicationStats.seeds,
-            "cloud_server", "lambda_scan",
-            replicationStats.lambdas,
-            replicationStats.slots
-        )
-        plot_multi_seed_per_lambda_improved(
-            replicationStats.coord_wait_interval,
-            replicationStats.seeds,
-            "coord_server_edge", "lambda_scan",
-            replicationStats.lambdas,
-            replicationStats.slots
-        )
-    return replicationStats
-
-
-def improved_start_infinite_lambda_scan_simulation():
-    print("\nINFINITE SIMULATION - Aeroporto Ciampino")
-
-    file_name = "infinite_statistics.csv"
-    # 🔧 usa l'header 'infinite'
-    clear_infinite_file_improved(file_name)  # <-- fix
-
-    replicationStats = ReplicationStats_improved()
-
-    plantSeeds(cs.SEED)
-    base_seed = getSeed()
-    print(f"\n★ Infinite horizon con seed base = {base_seed}")
-
-    for lam_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-        print(f"\n➤ Slot λ[{lam_index}] = {lam:.5f} job/sec")
-
-        batch_stats = infinite_simulation_improved(forced_lambda=lam)
-
-        for batch_index, results in enumerate(batch_stats.results):
-            results['lambda'] = lam
-            results['slot'] = lam_index
-            results['seed'] = base_seed
-            results['batch'] = batch_index
-            write_infinite_row_improved(results, file_name)
-
-            # ⬇️ questa salva Edge_NuoviArrivi_* come 'edge' negli array
-            append_stats_improved(replicationStats, results, batch_stats)
-
-    print_simulation_stats_improved(replicationStats, "lambda_scan_infinite")
-    # 📊 NEW: genera i grafici dall'infinite_statistics.csv (improved)
-    plot_infinite_analysis_improved()
-    return replicationStats
-
-
-
-def improved_start_scalability_simulation():
-    """
-    Scalabilità UNIFICATA (Edge + Coordinator).
-    """
-    file_name = "merged_scalability_statistics.csv"
-    clear_merged_scalability_file_improved(file_name)
-
-    output_dir = os.path.join("output_improved", "merged_scalability")
-    os.makedirs(output_dir, exist_ok=True)
-
-    slot_duration = getattr(cs, "SLOT_DURATION", 3600.0)
-    num_slots = len(cs.LAMBDA_SLOTS) if hasattr(cs, "LAMBDA_SLOTS") else 1
-    horizon = slot_duration * num_slots
-    decision_interval = float(getattr(cs, "SCALING_WINDOW", 1000.0))
-    if decision_interval <= 0:
-        decision_interval = slot_duration / 20.0
-
-    pc_values = getattr(cs, "PC_VALUES", [0.1, 0.4, 0.5, 0.7, 0.9])
-    print("MERGED (EDGE+COORD) SCALABILITY SIMULATION")
-
-    for pc in pc_values:
-        set_pc_and_update_probs(pc)
-        print(f"\n### p_c = {pc:.2f} (P_COORD={cs.P_COORD:.2f}) | "
-              f"P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
-
-        rep_traces_edge, rep_traces_coord = [], []
-        rep_edge_wait_means, rep_coord_wait_means, rep_cloud_wait_means = [], [], []
-        edge_servers_all, coord_servers_all = [], []
-        edge_scale_events, coord_scale_events = [], []
-
-        for rep in range(cs.REPLICATIONS):
-            print(f"  ★ Replica {rep + 1}")
-            plantSeeds(cs.SEED + rep)
-            seed = getSeed()
-
-            edge_wait_this_rep, coord_wait_this_rep, cloud_wait_this_rep = [], [], []
-            t_trace, edge_trace, coord_trace = [], [], []
-            t_offset = 0.0
-            last_edge_count, last_coord_count = None, None
-
-            for slot_index, (_, _, lam) in enumerate(cs.LAMBDA_SLOTS):
-                print(f"    ➤ Slot {slot_index} - λ = {lam:.5f} job/sec")
-                stop = slot_duration
-
-                res = edge_coord_scalability_simulation_improved(stop=stop, forced_lambda=lam, slot_index=slot_index)
-                res["seed"] = seed
-                res["lambda"] = lam
-                res["slot"] = slot_index
-                res["pc"] = pc
-                res["p1"], res["p2"], res["p3"], res["p4"] = cs.P1_PROB, cs.P2_PROB, cs.P3_PROB, cs.P4_PROB
-                write_file_merged_scalability_improved(res, file_name)
-
-                # 🔧 campi aggiornati
-                edge_wait_this_rep.append(res["edge_NuoviArrivi_avg_wait"])
-                coord_wait_this_rep.append(res["coord_avg_wait"])
-                cloud_wait_this_rep.append(res["cloud_avg_wait"])
-                edge_servers_all.append(res["edge_server_number"])
-                coord_servers_all.append(res["coord_server_number"])
-
-                for (t_rel, s, _) in res.get("edge_scal_trace", []):
-                    t_abs = t_offset + t_rel
-                    t_trace.append(t_abs)
-                    edge_trace.append(s)
-                    if last_edge_count is None:
-                        last_edge_count = s
-                    elif s != last_edge_count:
-                        direction = "UP" if s > last_edge_count else "DOWN"
-                        edge_scale_events.append((slot_index, t_abs, direction, s))
-                        last_edge_count = s
-
-                for (t_rel, s, _) in res.get("coord_scal_trace", []):
-                    t_abs = t_offset + t_rel
-                    coord_trace.append(s)
-                    if last_coord_count is None:
-                        last_coord_count = s
-                    elif s != last_coord_count:
-                        direction = "UP" if s > last_coord_count else "DOWN"
-                        coord_scale_events.append((slot_index, t_abs, direction, s))
-                        last_coord_count = s
-
-                t_offset += slot_duration
-
-            if edge_wait_this_rep:
-                rep_edge_wait_means.append(sum(edge_wait_this_rep) / len(edge_wait_this_rep))
-            if coord_wait_this_rep:
-                rep_coord_wait_means.append(sum(coord_wait_this_rep) / len(coord_wait_this_rep))
-            if cloud_wait_this_rep:
-                rep_cloud_wait_means.append(sum(cloud_wait_this_rep) / len(cloud_wait_this_rep))
-
-            rep_traces_edge.append(list(zip(t_trace, edge_trace)))
-            rep_traces_coord.append(list(zip(t_trace[:len(coord_trace)], coord_trace)))
-
-        grid = [i * decision_interval for i in range(int(horizon / decision_interval) + 1)]
-
-        def step_value(trace_tv, t):
-            if not trace_tv:
-                return 1
-            v_last = trace_tv[0][1]
-            for (tt, vv) in trace_tv:
-                if tt <= t:
-                    v_last = vv
-                else:
-                    break
-            return v_last
-
-        avg_edge, avg_coord = [], []
-        for t in grid:
-            vals_e = [step_value(tr, t) for tr in rep_traces_edge]
-            vals_c = [step_value(tr, t) for tr in rep_traces_coord]
-            avg_edge.append(sum(vals_e) / max(1, len(vals_e)))
-            avg_coord.append(sum(vals_c) / max(1, len(vals_c)))
-
-        plt.figure()
-        plt.plot(grid, avg_edge, label="Edge servers (media repliche)")
-        plt.plot(grid, avg_coord, label="Coordinator servers (media repliche)")
-        plt.xlabel("Tempo")
-        plt.ylabel("Numero server")
-        plt.title(f"Andamento server nel tempo – pc={pc:.2f} (media su {cs.REPLICATIONS} repliche)")
-        plt.legend()
-        fig_path = os.path.join(output_dir, f"servers_over_time_pc_{str(pc).replace('.', '_')}.png")
-        plt.savefig(fig_path, dpi=150, bbox_inches="tight")
-        plt.close()
-        print(f"  Grafico scritto: {fig_path}")
-
-        print("\n--- REPORT CUMULATIVO ---")
-        if edge_servers_all:
-            print(f"Edge servers     -> min: {min(edge_servers_all)}, max: {max(edge_servers_all)}, avg: {sum(edge_servers_all)/len(edge_servers_all):.4f}")
-        if coord_servers_all:
-            print(f"Coordinator srv  -> min: {min(coord_servers_all)}, max: {max(coord_servers_all)}, avg: {sum(coord_servers_all)/len(coord_servers_all):.4f}")
-
-        m, ci = calculate_confidence_interval(rep_edge_wait_means)
-        print(f"Edge avg wait    -> {m:.4f} ± {ci:.4f} (95% CI)")
-        m, ci = calculate_confidence_interval(rep_cloud_wait_means)
-        print(f"Cloud avg wait   -> {m:.4f} ± {ci:.4f} (95% CI)")
-        m, ci = calculate_confidence_interval(rep_coord_wait_means)
-        print(f"Coord avg wait   -> {m:.4f} ± {ci:.4f} (95% CI)")
-
-        print("\nEventi scalabilità EDGE (tempo assoluto; slot λ):")
-        if edge_scale_events:
-            for slot_idx, t_abs, direction, new_count in edge_scale_events:
-                print(f"  t={t_abs:.1f}s  slot={slot_idx}  -> {direction} a {new_count} server")
-        else:
-            print("  Nessun cambiamento")
-
-        print("\nEventi scalabilità COORD (tempo assoluto; slot λ):")
-        if coord_scale_events:
-            for slot_idx, t_abs, direction, new_count in coord_scale_events:
-                print(f"  t={t_abs:.1f}s  slot={slot_idx}  -> {direction} a {new_count} server")
-        else:
-            print("  Nessun cambiamento")
-
-    print(f"\nCSV scritto: output_improved/{file_name}")
 
 
 def _mean_ci_95(series):
@@ -843,23 +631,23 @@ if __name__ == "__main__":
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
     t_std = time.perf_counter()
 
-    #stats_finite = start_finite_simulation()
+    stats_finite = start_finite_simulation()
 
-    #summarize_by_lambda("output/finite_statistics.csv",
-    #                    output_name="FINITE_statistics_Global.txt",
-     #                   output_dir="reports_Standard_Model")
+    summarize_by_lambda("output/finite_statistics.csv",
+                    output_name="FINITE_statistics_Global.txt",
+                     output_dir="reports_Standard_Model")
 
-   # start_transient_analysis()
+    start_transient_analysis()
 
-   # stats_infinite = start_infinite_single_simulation()
-   # summarize_by_lambda("output/infinite_statistics.csv",
-      #    output_name="INFINITE_statistics_Global.txt",
-      #    output_dir="reports_Standard_Model")
+    stats_infinite = start_infinite_single_simulation()
+    summarize_by_lambda("output/infinite_statistics.csv",
+          output_name="INFINITE_statistics_Global.txt",
+          output_dir="reports_Standard_Model")
 
     start_scalability_simulation()
     summarize_by_lambda("output/merged_scalability_statistics.csv",
-          output_name="SCALABILITY_by_lambda_report.txt",
-                               output_dir="reports_Standard_Model")
+        output_name="SCALABILITY_by_lambda_report.txt",
+                            output_dir="reports_Standard_Model")
 
     #  dt_std = time.perf_counter() - t_std
     # print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")

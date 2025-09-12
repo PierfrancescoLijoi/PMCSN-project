@@ -39,7 +39,7 @@ INFINITY = float("inf")
 
 
 #Analisi transiente
-TRANSIENT_REPLICATIONS = 20
+TRANSIENT_REPLICATIONS = 10
 
 # -------------------------
 # Routing e probabilità
@@ -78,19 +78,24 @@ COORD_SERVERS_MAX = 6 # Numero massimo di server Coordinator (per scalabilità)
 UTILIZATION_UPPER = 0.8  # aggiunta server sopra 80% utilizzo
 UTILIZATION_LOWER = 0.3  # rimozione server sotto 30% utilizzo
 
+
+EDGE_SERVERS_INIT = EDGE_SERVERS
+COORD_EDGE_SERVERS_INIT = COORD_EDGE_SERVERS
+
 # -------------------------
 # Parametri di arrivo (Poisson non omogeneo)
 # -------------------------
 # λ stimati per fasce orarie sulla base dei dati ADR (Tabella \ref{tab:lambda})
 # Ogni tupla = (inizio_fascia_sec, fine_fascia_sec, lambda [job/min])
 LAMBDA_SLOTS = [
-    (0,    14399, 1.21),   # 00:00 - 03:59 con k=7.5
-    (14400, 28799, 1.45),  # 04:00–07:59
-    (28800, 43199, 1.33),    # 08:00–11:59
-    (43200, 57599, 1.50),    # 12:00–15:59
-    (57600, 71999, 1.38),     # 16:00–19:59
-    (72000, 86399, 1.41)     # 20:00–23:59
+    (0,     14399, 0.83),  # 00:00–03:59  LOW
+    (14400, 28799, 1.66),  # 04:00–07:59  LOW
+    (28800, 43199, 1.16),  # 08:00–11:59  VERY HIGH (picco mattina)
+    (43200, 57599, 1.90),  # 12:00–15:59  MEDIUM (pranzo)
+    (57600, 71999, 1.49),  # 16:00–19:59  HIGH (rientro/pomeriggio tardi)
+    (72000, 86399, 1.24),  # 20:00–23:59  LOW-MED (serale)
 ]
+# media = (0.95 + 1.00 + 1.98 + 1.30 + 1.95 + 1.10) / 6 = 1.38
 LAMBDA = 1.38
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 

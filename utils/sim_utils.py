@@ -198,57 +198,36 @@ def remove_batch(stats, n, renumber_batches=True):
 
 
 def reset_infinite(self):
-        """
-        Reset per la simulazione a orizzonte infinito (batch-means).
-        Azzera SOLO contatori e aree del batch corrente.
-        NON svuota code, NON azzera numeri in sistema, NON cambia i completion in corso.
-        """
+    """
+    Batch-means corretto:
+    - Azzera SOLO accumulatori e contatori del batch.
+    - NON svuota code, NON modifica number_* in sistema,
+      NON tocca i completion/eventi già schedulati.
+    """
 
-        # --- Contatori batch (arrivi/completamenti) ---
-        self.job_arrived = 0
+    # --- contatori batch (arrivi/completamenti nel SOLO batch corrente) ---
+    self.job_arrived = 0
 
-        self.index_edge = 0
-        self.index_cloud = 0
-        self.index_coord = 0
+    self.index_edge = 0
+    self.index_cloud = 0
+    self.index_coord = 0
 
-        # Breakdown Edge per classi (E/C) – solo contatori del batch
-        self.index_edge_E = 0
-        self.index_edge_C = 0
+    # breakdown per classi nel batch corrente
+    self.index_edge_E = 0
+    self.index_edge_C = 0
+    self.count_E = 0
+    self.count_C = 0
+    self.count_E_P1 = 0
+    self.count_E_P2 = 0
+    self.count_E_P3 = 0
+    self.count_E_P4 = 0
 
-        self.count_E = 0
-        self.count_C = 0
-        self.count_E_P1 = 0
-        self.count_E_P2 = 0
-        self.count_E_P3 = 0
-        self.count_E_P4 = 0
-
-        # --- Aree accumulate nel batch ---
-        self.area_edge = Track()
-        self.area_cloud = Track()
-        self.area_coord = Track()
-        self.area_E = Track()
-        self.area_C = Track()
-
-        # code: svuotiamo per garantire indipendenza tra batch
-        self.queue_edge = []
-        self.queue_coord_low = []
-        self.queue_coord_high = []
-
-        # numeri di job in servizio/attesa
-        self.number_edge = 0
-        self.number_cloud = 0
-        self.number_coord = 0
-
-        self.number_E = 0  #
-        self.number_C = 0
-
-        self.index_edge_E = 0
-        self.index_edge_C = 0
-
-        # completamenti a ∞
-        self.t.completion_edge = cs.INFINITY
-        self.t.completion_cloud = cs.INFINITY
-        self.t.completion_coord = cs.INFINITY
+    # --- aree (integrali) accumulate nel SOLO batch corrente ---
+    self.area_edge = Track()
+    self.area_cloud = Track()
+    self.area_coord = Track()
+    self.area_E = Track()
+    self.area_C = Track()
 
 # -------------------------------
 # INTERVALLI DI CONFIDENZA

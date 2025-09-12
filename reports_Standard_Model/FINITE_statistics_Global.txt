@@ -1,4 +1,4 @@
-# Summary report generated on 2025-09-12 14:01:56
+# Summary report generated on 2025-09-12 18:32:49
 Source CSV: output/finite_statistics.csv
 Note: mean ± 95% CI (z=1.96).
 
