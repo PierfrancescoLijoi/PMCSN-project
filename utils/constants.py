@@ -99,6 +99,7 @@ LAMBDA_SLOTS = [
 LAMBDA = 1.38
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 
+LAMBDA_SCAN = [0.8, 1.20, 1.30,1.50, 1.55, 1.60, 1.70, 1.80]
 
 # -------------------------
 # Tempi medi di servizio

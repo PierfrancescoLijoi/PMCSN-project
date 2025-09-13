@@ -8,10 +8,13 @@ Riferimento: Sezione "Modello computazionale" del documento.
 La simulazione segue un approccio next-event-driven con orizzonte finito
 (transiente), come definito a pagina 8–10 del testo allegato.
 """
+import math
 import os
 import time
 from datetime import datetime, timedelta
+from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
 
@@ -142,6 +145,107 @@ def start_infinite_single_simulation():
     print_simulation_stats(batch_stats, "infinite")
     plot_infinite_analysis()
     return batch_stats
+
+# ---------------------------- Edge_E QoS vs lambda ----------------------------
+def start_infinite_lambda_scan_plot_only(lambdas, qos_threshold: float = 3.0) -> str:
+    """
+    Orizzonte infinito: esegue una scansione su una LISTA di λ (job/s),
+    per ogni λ lancia infinite_simulation(forced_lambda=λ), calcola la
+    risposta media dei pacchetti E @ Edge aggregando sui batch, e
+    produce UN SOLO grafico con UNA SOLA curva (risposta E vs λ).
+    Non legge/scrive alcun CSV. Ritorna il path del PNG creato.
+    """
+
+    if not lambdas:
+        raise ValueError("Lista di λ vuota. Passa almeno un valore > 0.")
+
+    # Normalizza/deduplica mantenendo l'ordine
+    sanitized = []
+    for l in lambdas:
+        try:
+            f = float(l)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(f) and f > 0 and (len(sanitized) == 0 or f != sanitized[-1]):
+            sanitized.append(f)
+    if not sanitized:
+        raise ValueError("Nessun λ valido dopo la sanitizzazione.")
+
+    # Seed coerenti con il resto del progetto (senza generare CSV)
+    plantSeeds(cs.SEED)
+
+    xs, ys = [], []
+
+    def _extract_E_response(batch_results: list[dict]) -> float:
+        """
+        Ritorna la media (su batch) del tempo di risposta dei pacchetti E @ Edge.
+        Usa 'edge_E_avg_response' se presente; altrimenti ricostruisce come
+        edge_E_avg_delay + (edge_E_service_time_mean | edge_service_time_mean).
+        """
+        vals = []
+        svc_candidates = ("edge_E_service_time_mean", "edge_service_time_mean")
+        for row in batch_results:
+            # 1) colonna diretta
+            if "edge_E_avg_response" in row and row["edge_E_avg_response"] is not None:
+                vals.append(float(row["edge_E_avg_response"]))
+                continue
+            # 2) fallback: delay + service time
+            delay = row.get("edge_E_avg_delay", None)
+            if delay is None:
+                continue
+            svc = None
+            for sc in svc_candidates:
+                if sc in row and row[sc] is not None:
+                    svc = float(row[sc]); break
+            if svc is None:
+                continue
+            vals.append(float(delay) + float(svc))
+        if not vals:
+            raise ValueError("Impossibile derivare la risposta E @ Edge dai batch.")
+        return float(np.nanmean(vals))
+
+    # Simulazioni per ogni λ (no CSV)
+    for idx, lam in enumerate(sanitized):
+        print(f"  ➤ λ={lam:.5f} (index {idx}) — infinite batch-means…")
+        stats = infinite_simulation(forced_lambda=lam)
+        mean_resp = _extract_E_response(stats.results)
+        xs.append(lam)
+        ys.append(mean_resp)
+
+    # Output path
+    out_dir = Path("output") / "plot" / "orizzonte infinito"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / "edge_E_response_vs_lambda.png"
+
+    # Plot singola curva
+    import matplotlib.pyplot as plt
+    plt.figure(figsize=(10, 6))
+    plt.plot(xs, ys, marker="o", linewidth=2, label="E @ Edge (media sui batch)")
+    plt.xlabel("λ [job/s]")
+    plt.ylabel("Tempo di risposta E @ Edge [s]")
+    plt.title("Orizzonte infinito — risposta media (E) vs λ")
+    plt.ylim(bottom=0)               # y parte da 0
+    plt.margins(x=0.02)              # un minimo di respiro a sinistra/destra
+
+    # Linea QoS e prima violazione (se richiesta)
+    if qos_threshold is not None:
+        plt.axhline(y=qos_threshold, linestyle="--", label=f"QoS = {qos_threshold}s")
+        # Trova la prima λ che supera la soglia
+        for lam, r in zip(xs, ys):
+            if r > qos_threshold:
+                plt.axvline(x=lam, linestyle=":", label=f"violazione da λ ≳ {lam:g}")
+                plt.annotate(f"λ ≈ {lam:g}", xy=(lam, qos_threshold),
+                             xytext=(5, 10), textcoords="offset points")
+                break
+
+    plt.legend()
+    plt.tight_layout()
+    plt.savefig(out_path, dpi=150)
+    plt.close()
+    print(f"[start_infinite_lambda_scan_plot_only] Grafico salvato in: {out_path}")
+    return str(out_path)
+
+
 
 
 def start_scalability_simulation():
@@ -631,23 +735,26 @@ if __name__ == "__main__":
     print("INIZIO---- STANDARD MODEL SIMULTIONS.\n")
     t_std = time.perf_counter()
 
-    stats_finite = start_finite_simulation()
+  #  stats_finite = start_finite_simulation()
 
-    summarize_by_lambda("output/finite_statistics.csv",
-                    output_name="FINITE_statistics_Global.txt",
-                     output_dir="reports_Standard_Model")
+   # summarize_by_lambda("output/finite_statistics.csv",
+    #                output_name="FINITE_statistics_Global.txt",
+     #                output_dir="reports_Standard_Model")
 
-    start_transient_analysis()
+    #start_transient_analysis()
 
-    stats_infinite = start_infinite_single_simulation()
-    summarize_by_lambda("output/infinite_statistics.csv",
-          output_name="INFINITE_statistics_Global.txt",
-          output_dir="reports_Standard_Model")
+ #   stats_infinite = start_infinite_single_simulation()
+  #  summarize_by_lambda("output/infinite_statistics.csv",
+   #       output_name="INFINITE_statistics_Global.txt",
+    #      output_dir="reports_Standard_Model")
 
-    start_scalability_simulation()
-    summarize_by_lambda("output/merged_scalability_statistics.csv",
-        output_name="SCALABILITY_by_lambda_report.txt",
-                            output_dir="reports_Standard_Model")
+    # Solo grafico, una curva risposta E vs λ (nessun CSV)
+    start_infinite_lambda_scan_plot_only(cs.LAMBDA_SCAN, qos_threshold=3.0)
+
+   # start_scalability_simulation()
+    #summarize_by_lambda("output/merged_scalability_statistics.csv",
+     #   output_name="SCALABILITY_by_lambda_report.txt",
+      #                      output_dir="reports_Standard_Model")
 
     #  dt_std = time.perf_counter() - t_std
     # print(f"\n⏱ Tempo STANDARD: {_fmt_hms(dt_std)}")
