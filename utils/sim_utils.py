@@ -23,8 +23,8 @@ from fractions import Fraction
 # utils/sim_utils.py
 BASE_P = getattr(cs, "P_BASES", (0.20, 0.25, 0.10, 0.05))
 
-def set_pc_and_update_probs(pc: float):
-    pc = max(0.0, min(1.0, float(pc)))
+def set_pc_and_update_probs(pc1: float):
+    pc = max(0.0, min(1.0, float(pc1)))
     cs.P_C = pc
     cs.P_COORD = 1.0 - pc
 

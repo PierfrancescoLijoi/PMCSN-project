@@ -31,7 +31,112 @@ from utils.simulation_output import write_file, clear_file, print_simulation_sta
     plot_infinite_analysis, plot_analysis, plot_transient_with_seeds
 from utils.simulation_stats import ReplicationStats
 
+def summarize_by_pc(input_csv: str,
+                    output_name: str | None = None,
+                    exclude_cols=None,
+                    output_dir: str | None = None) -> str:
+    """
+    Report di medie ± CI(95%) raggruppando per pc (P_C).
+    Identico a summarize_by_lambda ma con groupby('pc').
+    """
+    import os
+    import pandas as pd
+    from datetime import datetime
 
+    if not os.path.exists(input_csv):
+        raise FileNotFoundError(f"File not found: {input_csv}")
+
+    df = pd.read_csv(input_csv)
+    if df.empty:
+        raise ValueError(f"No data in {input_csv}")
+
+    # normalizza intestazioni
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # stesse esclusioni della summarize_by_lambda
+    exclude = set(exclude_cols or [])
+    exclude |= {
+        'seed','slot','lambda','batch',
+        'pc','p1','p2','p3','p4',
+        'edge_scal_trace','coord_scal_trace',
+        'server_utilization_by_count'
+    }
+
+    # individua colonne numeriche metriche
+    metric_cols = []
+    for c in df.columns:
+        if c in exclude:
+            continue
+        try:
+            pd.to_numeric(df[c], errors='raise')
+            metric_cols.append(c)
+        except Exception:
+            pass
+
+    # utility mean ± CI (95%)
+    def _mean_ci_95(s: pd.Series):
+        s = pd.to_numeric(s, errors='coerce').dropna()
+        n = s.size
+        if n == 0:
+            return None, None, 0
+        m = float(s.mean())
+        sd = float(s.std(ddof=1)) if n > 1 else 0.0
+        z = 1.96
+        margin = z * (sd / (n ** 0.5)) if n > 1 else 0.0
+        return m, margin, n
+
+    def bucket_key(col: str):
+        if col.startswith('edge_NuoviArrivi_'): return (0, col)
+        if col.startswith('edge_Feedback_'):    return (1, col)
+        if col.startswith('cloud_'):            return (2, col)
+        if col.startswith('coord_'):            return (3, col)
+        if col.startswith('edge_'):             return (4, col)
+        return (5, col)
+
+    lines = []
+    lines.append(f"# Summary by Pc generated on {datetime.now():%Y-%m-%d %H:%M:%S}")
+    lines.append(f"Source CSV: {input_csv}")
+    lines.append("Note: mean ± 95% CI (z=1.96).")
+    lines.append("")
+
+    if 'pc' not in df.columns:
+        # fallback: nessuna colonna pc -> fa un unico blocco
+        lines.append(f"--- pc = (single-run)  (rows={len(df)})")
+        for col in sorted(metric_cols, key=bucket_key):
+            mean, margin, n = _mean_ci_95(df[col])
+            if mean is None:
+                continue
+            lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+        lines.append("")
+    else:
+        grouped = df.groupby('pc', dropna=False)
+        for pc_val, g in grouped:
+            try:
+                pc_num = float(pc_val)
+                header = f"--- pc = {pc_num:.6f}"
+            except Exception:
+                header = f"--- pc = {pc_val}"
+            lines.append(f"{header}  (rows={len(g)})")
+            for col in sorted(metric_cols, key=bucket_key):
+                mean, margin, n = _mean_ci_95(g[col])
+                if mean is None:
+                    continue
+                lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+            lines.append("")
+
+    base_dir = output_dir if output_dir is not None else os.path.dirname(input_csv) or '.'
+    os.makedirs(base_dir, exist_ok=True)
+    if output_name is None or not str(output_name).strip():
+        output_txt = os.path.join(base_dir, "summary_by_pc_Global_Table.txt")
+    else:
+        name = str(output_name)
+        output_txt = os.path.join(base_dir, name if os.path.splitext(name)[1] else f"{name}.txt")
+
+    with open(output_txt, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    print(f"[OK] Summary-by-pc written to: {output_txt}")
+    return output_txt
 def start_finite_simulation():
     lam = cs.LAMBDA          # job/sec
     stop = cs.STOP           # es. 86400 sec (24h)
@@ -295,7 +400,7 @@ def start_scalability_simulation():
             seed = lehmer_replica_seed(cs.SEED, J_REP, rep)  # seed indipendente per replica
             plantSeeds(seed)  # imposta gli stream RNG
             # resettiamo il numero di server ogni replica
-            cs.EDGE_SERVERS = int(getattr(cs, "EDGE_SERVERS_INIT", 1))
+            cs.EDGE_SERVERS = int(getattr(cs, "EDGE_SERVERS_INIT", 2))
             cs.COORD_EDGE_SERVERS = int(getattr(cs, "COORD_EDGE_SERVERS_INIT", 1))
 
             edge_wait_this_rep, coord_wait_this_rep, cloud_wait_this_rep = [], [], []
@@ -754,7 +859,7 @@ def run_slo_scalability_multi_pc(
     out_dir = Path(improved_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    stop = float(getattr(cs, "STOP", 86400.0))
+    stop = float(getattr(cs, "STOP", cs.STOP))
     step = float(getattr(cs, "SCALING_WINDOW", 900.0))
     slots = getattr(cs, "LAMBDA_SLOTS", [])
 
@@ -771,69 +876,26 @@ def run_slo_scalability_multi_pc(
             pass
 
     results_index = {}
-    for pc in pc_values:
+
+    for pc1 in pc_values:
         # 1) aggiorna probabilità come nello standard
-        set_pc_and_update_probs(pc)
-        print(f"[SLO-multi-pc] pc={pc:.2f}  -> P_COORD={cs.P_COORD:.2f} | "
+        set_pc_and_update_probs(pc1)
+        print(f" Pc={cs.P_C:.2f} e pc1={pc1:.2f} -> P_COORD={cs.P_COORD:.2f}  ")
+        print(f"[SLO-multi-pc] Pc={cs.P_C:.2f}  -> P_COORD={cs.P_COORD:.2f} | "
               f"P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
 
         # 2) repliche 24h con λ(t)
         res = run_finite_day_replications(R=replications, base_seed=base_seed)
 
-        # 3) (1) Moda server nel tempo (con linee slot)
-        png1 = None
-        try:
-            traces_all = res.get("traces_all", [])
-            if traces_all:
-                times = list(frange(0.0, stop, step))
-                if not times or times[-1] < stop - 1e-9:
-                    times.append(stop)
 
-                mode_servers = []
-                for t in times:
-                    vals = []
-                    for trace in traces_all:
-                        if not trace:
-                            continue
-                        last_m = None
-                        for (tt, mm, _metrics) in trace:
-                            if tt <= t:
-                                last_m = mm
-                            else:
-                                break
-                        if last_m is not None:
-                            vals.append(int(last_m))
-                    if vals:
-                        c = Counter(vals)
-                        top = max(c.values())
-                        candidates = [v for v, cnt in c.items() if cnt == top]
-                        mode_servers.append(int(min(candidates)))
-                    else:
-                        mode_servers.append(0)
-
-                fig, ax = plt.subplots(figsize=(10, 4.2))
-                ax.step(times, mode_servers, where="post", label="Edge (moda repliche)")
-                ax.set_xlim(0, stop)
-                ax.set_xlabel("Tempo (s)")
-                ax.set_ylabel("Numero server")
-                ax.set_title(f"Andamento server Edge — moda (pc={pc:.2f})")
-                ax.grid(True, linestyle="--", alpha=0.4)
-                _draw_slot_lines(ax)
-                fig.tight_layout()
-                png1 = out_dir / f"slo_servers_mode_pc_{pc:.2f}.png"
-                fig.savefig(png1, bbox_inches="tight", dpi=180)
-                plt.close(fig)
-            else:
-                print("[SLO-multi-pc] Nessuna traccia per il mode plot.")
-        except Exception as e:
-            print("[WARN] mode-plot error:", e)
+            # Scrivi CSV cumulativo (solo se abbiamo dati)
 
         # 4) (2) Grafico edge_node stile standard (le linee slot sono dentro plot_analysis)
         png2 = None
         try:
             series = res.get("series_all") or res.get("edge_series_all", [])
             if series:
-                label_type = f"slo_variable_lambda_pc_{pc:.2f}"
+                label_type = f"slo_variable_lambda_pc_{cs.P_C:.2f}"
                 out_img = plot_analysis(series, "edge_node", sim_type=label_type)
                 src_img = Path(out_img)
                 png2 = out_dir / f"edge_node_{label_type}.png"
@@ -849,8 +911,8 @@ def run_slo_scalability_multi_pc(
         except Exception as e:
             print("[WARN] edge plot error:", e)
 
-        results_index[f"{pc:.2f}"] = {
-            "mode_servers": str(png1) if png1 else "",
+        results_index[f"{pc1:.2f}"] = {
+           # "mode_servers": str(png1) if png1 else "",
             "edge_plot": str(png2) if png2 else ""
         }
 
@@ -934,9 +996,9 @@ if __name__ == "__main__":
     # ===================== MIGLIORATIVO =====================
     print("\n=== SLO-driven finite-day run (24h with LAMBDA_SLOTS) ===")
     run_slo_scalability_multi_pc(
-        pc_values=[0.10, 0.30, 0.40, 0.70, 0.90],  # oppure lascia None per usare cs.PC_VALUES
-        replications=None,  # usa cs.REPLICATIONS
-        base_seed=None  # usa cs.SEED
+        pc_values=None ,
+        replications=None,
+        base_seed=None
     )
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0
@@ -945,11 +1007,6 @@ if __name__ == "__main__":
 
 
 
-
-
-# (Facoltativo) Esempio di invocazione:
-# if __name__ == "__main__":
-#     run_slo_scalability_finite_simulation(replications=cs.REPLICATIONS, base_base_seed=cs.SEED)
 
 
 

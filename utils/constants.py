@@ -12,7 +12,7 @@ nel documento PMCSN Project (Luglio 2025).
 # -------------------------
 SEED = 123456789
 # Numero di repliche per stimare le metriche (Sezione 5.2 - batch means e replicazioni)
-REPLICATIONS = 100
+REPLICATIONS = 1
 
 
 
@@ -28,8 +28,8 @@ EDGE_M = 1  # M/M/1 per il nodo Edge
 # -------------------------
 # La simulazione parte a t=0 secondi
 START = 0.0
-# Orizzonte finito: 24 ore = 86400 secondi (Sezione 5.1 del documento)
-STOP = 86400
+# Orizzonte finito: 24 ore = 86400 secondi (Sezione 5.1 del documento) ,48 ore = 172800
+STOP = 172800
 # Stop ridotto per analisi transiente (documento: Sezione "Analisi Transiente")
 STOP_ANALYSIS = 300000
 # Caso infinito (non usato qui, ma previsto come compatibilità col framework)
@@ -65,7 +65,7 @@ P4_PROB = P_COORD * P4
 # Configurazione dei server
 # -------------------------
 # Un singolo nodo Edge (FIFO infinita, Sezione "Modello dei centri - Edge")
-EDGE_SERVERS = 1
+EDGE_SERVERS = 2
 # Cloud trattato come infinite server (Sezione "Modello dei centri - Cloud")
 CLOUD_SERVERS = float("inf")
 # Un singolo Coordinator Server Edge (Sezione "Coordinator Server Edge")
@@ -99,8 +99,7 @@ LAMBDA_SLOTS = [
 LAMBDA = 1.38
 SLOT_DURATION = 14400  # 4 ore di simulazione per ogni λ
 
-LAMBDA_SCAN = [0.8, 1.20, 1.30,1.50, 1.55, 1.60, 1.70, 1.80]
-
+PC_VALUES =[0.1, 0.4, 0.5, 0.7, 0.9]
 # -------------------------
 # Tempi medi di servizio
 # -------------------------

@@ -389,20 +389,16 @@ def print_simulation_stats(stats, sim_type):
 
 
 
-# utils/simulation_output.py
 def plot_analysis(series, name, sim_type="finite_fixed_lambda"):
     """
-    Traccia 1 curva per replica.
-    - series: [[(t,y), ...], [(t,y), ...], ...]  (oppure una singola [(t,y), ...])
-    - seeds:  mantenuto solo per compatibilità; NON usato in legenda
-    - name:   nome file immagine senza estensione
-    - sim_type: per scegliere la sotto-cartella di output
+    Traccia 1 curva per replica e ripete le fasce λ ogni giorno.
+    - series: [[(t,y),...], ...] oppure [(t,y),...]
     """
     import matplotlib
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     import os
-    import utils.constants as cs  # per fissare l'asse X a [0, STOP]
+    import utils.constants as cs  # per STOP e LAMBDA_SLOTS
 
     def _is_xy_list(obj):
         return bool(obj) and isinstance(obj[0], (list, tuple)) and len(obj[0]) == 2 and \
@@ -410,6 +406,13 @@ def plot_analysis(series, name, sim_type="finite_fixed_lambda"):
 
     def _is_list_of_xy_lists(obj):
         return bool(obj) and isinstance(obj[0], (list, tuple)) and _is_xy_list(obj[0])
+
+    def _max_x(series):
+        if _is_list_of_xy_lists(series):
+            return max((pt[0] for run in series for pt in run), default=float(getattr(cs, "STOP", 86400.0)))
+        elif _is_xy_list(series):
+            return max((pt[0] for pt in series), default=float(getattr(cs, "STOP", 86400.0)))
+        return float(getattr(cs, "STOP", 86400.0))
 
     label = _label_for_sim(sim_type)
 
@@ -419,56 +422,73 @@ def plot_analysis(series, name, sim_type="finite_fixed_lambda"):
 
     plt.figure(figsize=(10, 6))
 
+    # --- disegno serie ---
     if _is_list_of_xy_lists(series):
-        # Serie = [ replica1[(t,y),...], replica2[(t,y),...], ... ]
         for run in series:
             if not run:
                 continue
             xs = [pt[0] for pt in run]
             ys = [pt[1] for pt in run]
-            plt.plot(xs, ys)  # nessuna legenda (no seed)
+            plt.plot(xs, ys)
     elif _is_xy_list(series):
         xs = [pt[0] for pt in series]
         ys = [pt[1] for pt in series]
         plt.plot(xs, ys)
     else:
-        # Fallback: niente (non abbiamo (t,y))
         plt.close()
         return out_path
 
-    # Assi e stile
-    try:
-        plt.xlim(0, float(getattr(cs, "STOP", 86400.0)))  # 24h = 86400s
-    except Exception:
-        pass
+    # --- assi e stile ---
+    x_right = _max_x(series)
+    plt.xlim(0, x_right)
     plt.xlabel("Simulation time (s)")
     plt.ylabel("Average response time (s)")
     plt.title(f"{name} — {label.replace('_', ' ')}")
     plt.grid(True, alpha=0.3)
 
-    # --- Delimitatori fasce di lambda (orizzonte finito) ---
+    # Forza asse Y: tick da 0.1 a 0.7
+    yticks = [i / 10 for i in range(1, 8)]  # 0.1,0.2,...,0.7
+    plt.yticks(yticks)
+    plt.ylim(0.0, 0.7)
+
+    # --- Delimitatori fasce di lambda ripetuti ogni giorno ---
     try:
-        slots = getattr(cs, "LAMBDA_SLOTS", [])
+        slots = list(getattr(cs, "LAMBDA_SLOTS", []))  # [(start,end,lam), ...] su 0..86400
+        DAY = float(getattr(cs, "DAY_SECONDS", 86400.0))  # 1 giorno in secondi
+
         if slots:
-            # disegna il bordo di ogni fascia (alla fine slot)
-            for (_s, e, lam) in slots:
-                plt.axvline(x=float(e), linestyle=":", alpha=0.35)
-            # etichetta (facoltativa) con il valore di λ al centro fascia
-            ymin, ymax = plt.ylim()
-            for (s, e, lam) in slots:
-                cx = (float(s) + float(e)) / 2.0
-                plt.text(cx, ymax*0.98, f"λ={lam:g}", ha="center", va="top",
-                         fontsize=8, alpha=0.6)
-            plt.ylim(ymin, ymax)  # ripristina
+            # ripeti i marker di slot e le etichette su tutti i giorni coperti da x_right
+            n_days = int(x_right // DAY) + 1
+
+            for k in range(n_days):
+                offset = k * DAY
+                # linee di fine fascia e label λ
+                for (s, e, lam) in slots:
+                    xe = float(e) + offset
+                    if 0.0 <= xe <= x_right:
+                        plt.axvline(x=xe, linestyle=":", alpha=0.35)
+                    # testo al centro fascia
+                    cx = (float(s) + float(e)) / 2.0 + offset
+                    if 0.0 <= cx <= x_right:
+                        plt.text(cx, 0.68, f"λ={lam:g}", ha="center", va="top",
+                                 fontsize=8, alpha=0.6)
+
+            # linee tratteggiate rosse ai confini di giorno: 86400, 172800, ...
+            d = DAY
+            while d <= x_right + 1e-9:
+                plt.axvline(x=d, linestyle="--", color="red", linewidth=1.2, alpha=0.7)
+                d += DAY
+
     except Exception:
         pass
 
+    # --- linea tratteggiata rossa a y=0.6 ---
+    plt.axhline(y=0.6, linestyle="--", color="red", linewidth=1.2, alpha=0.8)
 
     plt.tight_layout()
     plt.savefig(out_path, dpi=180, bbox_inches="tight")
     plt.close()
     return out_path
-
 
 
 def plot_multi_seed_per_lambda(
