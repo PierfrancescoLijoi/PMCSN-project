@@ -181,6 +181,147 @@ def start_finite_simulation():
 
     return replicationStats
 
+def summarize_by_lambda_2(input_csv: str,
+                          output_name: str | None = None,
+                          exclude_cols=None,
+                          output_dir: str | None = None,
+                          group_days_separately: bool = True) -> str:
+    """
+    Riassume TUTTE le colonne NUMERICHE presenti nel CSV con mean ± CI95,
+    raggruppando per:
+      - (pc, lambda, day) se group_days_separately=True
+      - (pc, lambda)      se group_days_separately=False
+
+    Parametri:
+      - input_csv    : percorso al CSV (es. output/slo_48h_by_day_slot.csv)
+      - output_name  : nome file di output .txt (default automatico)
+      - exclude_cols : colonne extra da escludere (oltre alle chiavi)
+      - output_dir   : cartella di output (default = cartella dell'input)
+      - group_days_separately : separa per giorno (True) o aggrega (False)
+
+    Ritorna:
+      Percorso del file di testo generato.
+    """
+    import os
+    import pandas as pd
+    from datetime import datetime
+
+    if not os.path.exists(input_csv):
+        raise FileNotFoundError(f"File not found: {input_csv}")
+
+    df = pd.read_csv(input_csv)
+    if df.empty:
+        raise ValueError(f"No data in {input_csv}")
+
+    # Normalizza intestazioni
+    df.columns = [str(c).strip() for c in df.columns]
+
+    # Chiavi richieste
+    required = {"pc", "lambda"}
+    if group_days_separately:
+        required |= {"day"}
+    missing = [c for c in required if c not in df.columns]
+    if missing:
+        raise ValueError(f"Mancano colonne richieste nel CSV: {missing}. "
+                         f"Attese almeno {sorted(required)}")
+
+    # Esclusioni di default (chiavi e campi non-metrici noti)
+    exclude = set(exclude_cols or [])
+    exclude |= {
+        "pc", "lambda", "day", "day_label", "slot",
+        "seed", "replication", "batch",
+        "p1", "p2", "p3", "p4",
+        "edge_scal_trace", "coord_scal_trace", "server_utilization_by_count",
+    }
+    # Se non stiamo separando per giorno, consentiamo che 'day' rimanga escluso (non metrica) ma non richiesto
+    if not group_days_separately and "day" in required:
+        required.remove("day")
+
+    # Costruisci lista metriche: TUTTE le colonne numeriche presenti (ordine come nel CSV)
+    metric_cols = []
+    for c in df.columns:
+        if c in exclude:
+            continue
+        # Prova a convertire l'intera colonna a numerico: se riesce → è metrica
+        s_num = pd.to_numeric(df[c], errors="coerce")
+        if s_num.notna().any():  # almeno un valore numerico valido
+            metric_cols.append(c)
+
+    if not metric_cols:
+        raise ValueError("Nessuna metrica numerica trovata nel CSV dopo le esclusioni.")
+
+    # Util per mean ± CI(95%)
+    def _mean_ci_95(series: pd.Series):
+        s = pd.to_numeric(series, errors="coerce").dropna()
+        n = int(s.size)
+        if n == 0:
+            return None, None, 0
+        m = float(s.mean())
+        sd = float(s.std(ddof=1)) if n > 1 else 0.0
+        z = 1.96  # 95%
+        margin = z * (sd / (n ** 0.5)) if n > 1 else 0.0
+        return m, margin, n
+
+    # Ordinamento numerico se possibile
+    def _num_or_str(x):
+        try:
+            return float(x)
+        except Exception:
+            return x
+
+    # Raggruppamento
+    group_keys = ["pc", "lambda"] + (["day"] if group_days_separately else [])
+    grouped = df.groupby(group_keys, dropna=False)
+
+    # Header report
+    lines = []
+    lines.append(f"# Summary by pc, lambda{', day' if group_days_separately else ''} — tutte le colonne numeriche")
+    lines.append(f"# Generated on {datetime.now():%Y-%m-%d %H:%M:%S}")
+    lines.append(f"Source CSV: {input_csv}")
+    lines.append("Note: mean ± 95% CI (z=1.96).")
+    lines.append("")
+
+    # Stampa gruppi in ordine per pc → lambda (→ day)
+    def _group_sort_key(keys_tuple):
+        # keys_tuple è una tupla di valori di groupby nell'ordine group_keys
+        return tuple(_num_or_str(k) for k in keys_tuple)
+
+    for keys, g in sorted(grouped, key=lambda kv: _group_sort_key(kv[0] if isinstance(kv[0], tuple) else (kv[0],))):
+        # Normalizza chiavi
+        if group_days_separately:
+            pc_val, lam_val, day_val = keys
+            header = f"PC = {_num_or_str(pc_val):.4f} | λ = {_num_or_str(lam_val):.6f} | day = {int(day_val)}"
+        else:
+            pc_val, lam_val = keys
+            header = f"PC = {_num_or_str(pc_val):.4f} | λ = {_num_or_str(lam_val):.6f}"
+
+        lines.append(f"--- {header}  (rows={len(g)})")
+
+        # Calcola per OGNI colonna metrica
+        for col in metric_cols:
+            mean, margin, n = _mean_ci_95(g[col])
+            if mean is None:
+                continue
+            lines.append(f"{col}: {mean:.6f} ± {margin:.6f}  [n={n}]")
+        lines.append("")
+
+    # Percorso output
+    base_dir = output_dir if output_dir is not None else (os.path.dirname(input_csv) or ".")
+    os.makedirs(base_dir, exist_ok=True)
+
+    if output_name is None or not str(output_name).strip():
+        out_name = "summary_by_pc_lambda_day.txt" if group_days_separately else "summary_by_pc_lambda.txt"
+    else:
+        out_name = str(output_name)
+        if not os.path.splitext(out_name)[1]:
+            out_name += ".txt"
+
+    output_txt = os.path.join(base_dir, out_name)
+    with open(output_txt, "w", encoding="utf-8") as f:
+        f.write("\n".join(lines))
+
+    print(f"[OK] Summary written to: {output_txt}")
+    return output_txt
 
 def start_transient_analysis():
     """
@@ -886,6 +1027,25 @@ def run_slo_scalability_multi_pc(
 
         # 2) repliche 24h con λ(t)
         res = run_finite_day_replications(R=replications, base_seed=base_seed)
+        # --- SCRITTURA CSV (giorno/fascia/giorno1|giorno2) ---
+        import os
+        out_csv = os.path.join("improved_output", "slo_48h_by_day_slot.csv")
+        os.makedirs(os.path.dirname(out_csv), exist_ok=True)
+
+        rows = res.get("by_day_slot_rows", [])
+        if rows:
+            # annota pc e probabilità sulle righe
+            for rr in rows:
+                rr["pc"] = cs.P_C
+                rr["p1"] = cs.P1_PROB; rr["p2"] = cs.P2_PROB; rr["p3"] = cs.P3_PROB; rr["p4"] = cs.P4_PROB
+            import pandas as pd
+            df = pd.DataFrame(rows)
+            write_header = not os.path.exists(out_csv) or (os.path.getsize(out_csv) == 0)
+            df.to_csv(out_csv, mode=("w" if write_header else "a"), header=write_header, index=False)
+            print(f"[SLO-multi-pc] Righe giorno/fascia scritte in: {out_csv}")
+        else:
+            print("[SLO-multi-pc] Nessuna riga (giorno/fascia) da scrivere per questo pc.")
+
 
 
             # Scrivi CSV cumulativo (solo se abbiamo dati)
@@ -995,11 +1155,16 @@ if __name__ == "__main__":
 
     # ===================== MIGLIORATIVO =====================
     print("\n=== SLO-driven finite-day run (24h with LAMBDA_SLOTS) ===")
+
     run_slo_scalability_multi_pc(
         pc_values=None ,
         replications=None,
         base_seed=None
     )
+
+    summarize_by_lambda_2("improved_output/slo_48h_by_day_slot.csv",
+                          group_days_separately=False)
+
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0
     print(f"⏱ Tempo TOTALE esecuzione: {_fmt_hms(dt_total)}")
