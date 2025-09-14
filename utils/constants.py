@@ -89,11 +89,11 @@ COORD_EDGE_SERVERS_INIT = COORD_EDGE_SERVERS
 # Ogni tupla = (inizio_fascia_sec, fine_fascia_sec, lambda [job/min])
 LAMBDA_SLOTS = [
     (0,     14399, 0.83),  # 00:00–03:59  LOW
-    (14400, 28799, 1.66),  # 04:00–07:59  LOW
-    (28800, 43199, 1.16),  # 08:00–11:59  VERY HIGH (picco mattina)
-    (43200, 57599, 1.90),  # 12:00–15:59  MEDIUM (pranzo)
-    (57600, 71999, 1.49),  # 16:00–19:59  HIGH (rientro/pomeriggio tardi)
-    (72000, 86399, 1.24),  # 20:00–23:59  LOW-MED (serale)
+    (14400, 28799, 1.66),  # 04:00–07:59  HIGH
+    (28800, 43199, 1.16),  # 08:00–11:59  MEDIUM
+    (43200, 57599, 1.90),  # 12:00–15:59  VERY HIGH
+    (57600, 71999, 1.49),  # 16:00–19:59  MEDIUM
+    (72000, 86399, 1.24),  # 20:00–23:59  LOW-MED
 ]
 # media = (0.95 + 1.00 + 1.98 + 1.30 + 1.95 + 1.10) / 6 = 1.38
 LAMBDA = 1.38
@@ -132,3 +132,29 @@ ALPHA = 0.05
 # -------------------------
 K = 128    # numero di batch
 B = 4080   # dimensione di ciascun batch
+
+# --------------------------------
+# PARAMETRI MODELLO MIGLIORATIVO
+# --------------------------------
+# QoS
+SLO_EDGE       = 3.0
+W_TARGET       = 2.4   # 20% sotto QoS
+
+# Finestra e ritmi
+SCALING_WINDOW      = 600.0    # 10 minuti
+SCALE_COOLDOWN_UP   = 600.0    # 10 minuti
+SCALE_COOLDOWN_DOWN = 1800.0   # 30 minuti
+DOWNSCALE_HOLD      = 1800.0   # 30 minuti
+FREEZE_AT_END       = 0.0      # opzionale; lascia 0 per semplicità
+
+# Isteresi (UP aggressivo, DOWN conservativo)
+W_UP,   W_DOWN   = 2.6, 2.1
+LQ_UP,  LQ_DOWN  = 4.0, 1.2
+RHO_UP, RHO_DOWN = 0.78, 0.55
+
+# Drain C e kicker
+C_DRAIN_THRESH   = 2    # non scendere se open_C > 2
+FORCE_DOWN_AFTER = 2    # se m*=1 per 2 finestre e segnali bassi: forza 2→1
+
+# Limiti Edge
+EDGE_SERVERS_MAX = 3    # 3 basta anche per p_c alti in questo schema (aumenta se necessario)
