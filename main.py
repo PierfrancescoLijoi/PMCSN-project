@@ -1,3 +1,4 @@
+
 """
 main.py
 ---------
@@ -17,11 +18,13 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from matplotlib import pyplot as plt
+from collections import Counter
 
 import utils.constants as cs
 from libraries.rngs import plantSeeds, getSeed
 from simulation.edge_cord_merged_scalability_simulator import edge_coord_scalability_simulation
 from simulation.simulator import finite_simulation, infinite_simulation
+from simulation.slo_scalability_simulator import  run_finite_day_replications
 from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, lehmer_replica_seed
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, write_infinite_row, \
     write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
@@ -721,6 +724,148 @@ def summarize_by_lambda(input_csv: str,
 def _fmt_hms(seconds: float) -> str:
     return str(timedelta(seconds=int(seconds)))
 
+
+# ----------------------------- MODELLO MIGLIORATIVO -----------------------------------
+# ----------------------- SLO SCALABILITY — MULTI p_c -----------------------
+def run_slo_scalability_multi_pc(
+        pc_values=None,
+        replications: int = None,
+        base_seed: int = None,
+        improved_dir: str = "improved_output") -> dict:
+    """
+    Scalabilità SLO-driven su più p_c:
+      (1) Plot #server Edge (moda su repliche) con linee verticali ai confini slot
+      (2) Plot edge_node stile 'finite' (le linee slot lì dipendono da plot_analysis)
+    """
+    from pathlib import Path
+    from collections import Counter
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+
+    import utils.constants as cs
+    from utils.sim_utils import set_pc_and_update_probs
+    from simulation.slo_scalability_simulator import run_finite_day_replications
+    from utils.simulation_output import plot_analysis
+
+    if pc_values is None:
+        pc_values = getattr(cs, "PC_VALUES", [0.1, 0.4, 0.5, 0.7, 0.9])
+
+    out_dir = Path(improved_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    stop = float(getattr(cs, "STOP", 86400.0))
+    step = float(getattr(cs, "SCALING_WINDOW", 900.0))
+    slots = getattr(cs, "LAMBDA_SLOTS", [])
+
+    def _draw_slot_lines(ax):
+        """Linee verticali ai confini delle fasce orarie."""
+        if not slots:
+            return
+        try:
+            bounds = sorted({float(s) for s, _, _ in slots} | {float(e) for _, e, _ in slots})
+            for b in bounds:
+                if 0.0 < b < stop:
+                    ax.axvline(b, linewidth=1.0, alpha=0.25)
+        except Exception:
+            pass
+
+    results_index = {}
+    for pc in pc_values:
+        # 1) aggiorna probabilità come nello standard
+        set_pc_and_update_probs(pc)
+        print(f"[SLO-multi-pc] pc={pc:.2f}  -> P_COORD={cs.P_COORD:.2f} | "
+              f"P1={cs.P1_PROB:.3f} P2={cs.P2_PROB:.3f} P3={cs.P3_PROB:.3f} P4={cs.P4_PROB:.3f}")
+
+        # 2) repliche 24h con λ(t)
+        res = run_finite_day_replications(R=replications, base_seed=base_seed)
+
+        # 3) (1) Moda server nel tempo (con linee slot)
+        png1 = None
+        try:
+            traces_all = res.get("traces_all", [])
+            if traces_all:
+                times = list(frange(0.0, stop, step))
+                if not times or times[-1] < stop - 1e-9:
+                    times.append(stop)
+
+                mode_servers = []
+                for t in times:
+                    vals = []
+                    for trace in traces_all:
+                        if not trace:
+                            continue
+                        last_m = None
+                        for (tt, mm, _metrics) in trace:
+                            if tt <= t:
+                                last_m = mm
+                            else:
+                                break
+                        if last_m is not None:
+                            vals.append(int(last_m))
+                    if vals:
+                        c = Counter(vals)
+                        top = max(c.values())
+                        candidates = [v for v, cnt in c.items() if cnt == top]
+                        mode_servers.append(int(min(candidates)))
+                    else:
+                        mode_servers.append(0)
+
+                fig, ax = plt.subplots(figsize=(10, 4.2))
+                ax.step(times, mode_servers, where="post", label="Edge (moda repliche)")
+                ax.set_xlim(0, stop)
+                ax.set_xlabel("Tempo (s)")
+                ax.set_ylabel("Numero server")
+                ax.set_title(f"Andamento server Edge — moda (pc={pc:.2f})")
+                ax.grid(True, linestyle="--", alpha=0.4)
+                _draw_slot_lines(ax)
+                fig.tight_layout()
+                png1 = out_dir / f"slo_servers_mode_pc_{pc:.2f}.png"
+                fig.savefig(png1, bbox_inches="tight", dpi=180)
+                plt.close(fig)
+            else:
+                print("[SLO-multi-pc] Nessuna traccia per il mode plot.")
+        except Exception as e:
+            print("[WARN] mode-plot error:", e)
+
+        # 4) (2) Grafico edge_node stile standard (le linee slot sono dentro plot_analysis)
+        png2 = None
+        try:
+            series = res.get("series_all") or res.get("edge_series_all", [])
+            if series:
+                label_type = f"slo_variable_lambda_pc_{pc:.2f}"
+                out_img = plot_analysis(series, "edge_node", sim_type=label_type)
+                src_img = Path(out_img)
+                png2 = out_dir / f"edge_node_{label_type}.png"
+                png2.parent.mkdir(parents=True, exist_ok=True)
+                if src_img.exists():
+                    png2.write_bytes(src_img.read_bytes())
+                    print(f"[SLO-multi-pc] Plot edge_node: {png2}")
+                else:
+                    print(f"[SLO-multi-pc] WARN: sorgente plot non trovata: {src_img}")
+                    png2 = None
+            else:
+                print("[SLO-multi-pc] Nessuna serie campionata per edge_node.")
+        except Exception as e:
+            print("[WARN] edge plot error:", e)
+
+        results_index[f"{pc:.2f}"] = {
+            "mode_servers": str(png1) if png1 else "",
+            "edge_plot": str(png2) if png2 else ""
+        }
+
+    return {"improved_output": str(out_dir), "plots": results_index}
+
+
+def frange(start: float, stop: float, step: float):
+    """Range a passo float che include il punto finale entro una tolleranza."""
+    t = float(start)
+    eps = 1e-9
+    step = float(step)
+    while t <= float(stop) + eps:
+        yield t
+        t += step
+# ----------------------------- RUN -----------------------------
 if __name__ == "__main__":
     """
     Avvio della simulazione quando il file viene eseguito direttamente.
@@ -749,7 +894,7 @@ if __name__ == "__main__":
     #      output_dir="reports_Standard_Model")
 
     # Solo grafico, una curva risposta E vs λ (nessun CSV)
-    start_infinite_lambda_scan_plot_only(cs.LAMBDA_SCAN, qos_threshold=3.0)
+  #  start_infinite_lambda_scan_plot_only(cs.LAMBDA_SCAN, qos_threshold=3.0)
 
    # start_scalability_simulation()
     #summarize_by_lambda("output/merged_scalability_statistics.csv",
@@ -785,9 +930,26 @@ if __name__ == "__main__":
     #print(f"⏱ Tempo IMPROVED: {_fmt_hms(dt_imp)}")
     #print("FINE---- IMPROVED MODEL SIMULTIONS.\n")
 
+
+    # ===================== MIGLIORATIVO =====================
+    print("\n=== SLO-driven finite-day run (24h with LAMBDA_SLOTS) ===")
+    run_slo_scalability_multi_pc(
+        pc_values=[0.10, 0.30, 0.40, 0.70, 0.90],  # oppure lascia None per usare cs.PC_VALUES
+        replications=None,  # usa cs.REPLICATIONS
+        base_seed=None  # usa cs.SEED
+    )
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0
     print(f"⏱ Tempo TOTALE esecuzione: {_fmt_hms(dt_total)}")
     print(f"▶ END: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
+
+
+
+
+
+# (Facoltativo) Esempio di invocazione:
+# if __name__ == "__main__":
+#     run_slo_scalability_finite_simulation(replications=cs.REPLICATIONS, base_base_seed=cs.SEED)
+
 
 
