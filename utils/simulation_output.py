@@ -18,7 +18,7 @@ from typing import List, Tuple, Dict, Any, Union
 import matplotlib.pyplot as plt
 import pandas as pd
 from utils import constants as cs
-from utils.sim_utils import calculate_confidence_interval
+from utils.sim_utils import calculate_confidence_interval, calculate_autocorrelation
 from datetime import datetime
 import json
 import matplotlib
@@ -687,6 +687,40 @@ def plot_infinite_analysis():
 
     print(f"[plot_infinite_analysis] CSV usato: {csv_path.resolve()}")
     print(f"[plot_infinite_analysis] Output dir: {plot_dir.resolve()}")
+
+
+
+def print_autocorrelation_from_csv(
+    csv_path: str,
+    columns: list = None,
+    max_lag: int = 50,
+    header: str = "\n[ACF] Autocorrelazione su medie di batch"
+) -> None:
+    """
+    Legge un CSV (es. output/infinite_statistics.csv) e stampa ACF per le colonne richieste.
+    Utile per verificare che le medie di batch siano ~indipendenti (rho(1) ~ 0).
+    """
+    df = pd.read_csv(csv_path)
+    if columns is None:
+        # default sensato per l'orizzonte infinito
+        candidates = [
+            "edge_avg_wait", "edge_E_avg_response", "edge_C_avg_response",
+            "cloud_avg_wait", "coord_avg_wait"
+        ]
+        columns = [c for c in candidates if c in df.columns]
+
+    print(header)
+    print(f"  file: {csv_path}")
+    for col in columns:
+        s = df[col].dropna().to_numpy()
+        if len(s) <= max_lag:
+            print(f"  - {col}: serie troppo corta (n={len(s)}) per K_LAG={max_lag}")
+            continue
+        mean, stdev, ac = calculate_autocorrelation(s, K_LAG=max_lag)
+        rho1 = ac[0]
+        rho5 = ac[4] if len(ac) > 4 else float('nan')
+        print(f"  - {col}: n={len(s)}, mean={mean:.4f}, sd={stdev:.4f}, rho(1)={rho1:.3f}, rho(5)={rho5:.3f}")
+
 
 
 

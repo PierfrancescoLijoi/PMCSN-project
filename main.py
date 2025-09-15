@@ -28,7 +28,7 @@ from simulation.slo_scalability_simulator import  run_finite_day_replications
 from utils.sim_utils import append_stats, calculate_confidence_interval, set_pc_and_update_probs, lehmer_replica_seed
 from utils.simulation_output import write_file, clear_file, print_simulation_stats, write_infinite_row, \
     write_file_merged_scalability, clear_merged_scalability_file, clear_infinite_file, \
-    plot_infinite_analysis, plot_analysis, plot_transient_with_seeds
+    plot_infinite_analysis, plot_analysis, plot_transient_with_seeds, print_autocorrelation_from_csv
 from utils.simulation_stats import ReplicationStats
 
 def summarize_by_pc(input_csv: str,
@@ -393,6 +393,13 @@ def start_infinite_single_simulation():
 
     print_simulation_stats(batch_stats, "infinite")
     plot_infinite_analysis()
+    if getattr(cs, "PRINT_AUTOCORRELATION", 0):
+        print_autocorrelation_from_csv(
+            csv_path=os.path.join("output", "infinite_statistics.csv"),
+            columns=["edge_avg_wait", "edge_E_avg_response", "edge_C_avg_response"],
+            max_lag=50,
+            header="\n[ACF] Medie di batch (orizzonte infinito)"
+        )
     return batch_stats
 
 # ---------------------------- Edge_E QoS vs lambda ----------------------------
@@ -1110,10 +1117,10 @@ if __name__ == "__main__":
 
     #start_transient_analysis()
 
- #   stats_infinite = start_infinite_single_simulation()
-  #  summarize_by_lambda("output/infinite_statistics.csv",
-   #       output_name="INFINITE_statistics_Global.txt",
-    #      output_dir="reports_Standard_Model")
+    stats_infinite = start_infinite_single_simulation()
+    summarize_by_lambda("output/infinite_statistics.csv",
+          output_name="INFINITE_statistics_Global.txt",
+          output_dir="reports_Standard_Model")
 
     # Solo grafico, una curva risposta E vs λ (nessun CSV)
   #  start_infinite_lambda_scan_plot_only(cs.LAMBDA_SCAN, qos_threshold=3.0)
@@ -1154,16 +1161,16 @@ if __name__ == "__main__":
 
 
     # ===================== MIGLIORATIVO =====================
-    print("\n=== SLO-driven finite-day run (24h with LAMBDA_SLOTS) ===")
+   # print("\n=== SLO-driven finite-day run (24h with LAMBDA_SLOTS) ===")
 
-    run_slo_scalability_multi_pc(
-        pc_values=None ,
-        replications=None,
-        base_seed=None
-    )
+    #run_slo_scalability_multi_pc(
+     #   pc_values=None ,
+      #  replications=None,
+       # base_seed=None
+    #)
 
-    summarize_by_lambda_2("improved_output/slo_48h_by_day_slot.csv",
-                          group_days_separately=False)
+    #summarize_by_lambda_2("improved_output/slo_48h_by_day_slot.csv",
+    #                      group_days_separately=False)
 
     # ===================== TOTALE =====================
     dt_total = time.perf_counter() - t0

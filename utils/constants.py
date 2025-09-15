@@ -41,6 +41,12 @@ INFINITY = float("inf")
 #Analisi transiente
 TRANSIENT_REPLICATIONS = 10
 
+
+# Stampa/analisi autocorrelazione su CSV
+PRINT_AUTOCORRELATION = 1
+def set_autocorrelation(value: int):
+    global PRINT_AUTOCORRELATION
+    PRINT_AUTOCORRELATION = int(value)
 # -------------------------
 # Routing e probabilità
 # -------------------------

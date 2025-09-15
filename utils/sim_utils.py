@@ -73,6 +73,76 @@ def safe_stdev(data, xbar=None):
     return sqrt(variance)
 
 # -------------------------------
+# Autocorrelation
+# -------------------------------
+# utils/autocorrelation.py
+from math import sqrt
+from typing import List, Tuple
+
+# massimo lag: di default 50 come nel progetto standard
+K_LAG_DEFAULT = 50
+
+def calculate_autocorrelation(data: List[float], K_LAG: int = K_LAG_DEFAULT) -> Tuple[float, float, list]:
+    """
+    Calcola mean, stdev e la sequenza di autocorrelazioni r[1..K_LAG]
+    usando un algoritmo one-pass con buffer circolare (Park & Geyer).
+    Richiede len(data) > K_LAG.
+    """
+    data = [float(x) for x in data]
+    n = len(data)
+    if n <= K_LAG:
+        raise ValueError("length of data must be greater than K_LAG")
+
+    SIZE = K_LAG + 1
+    hold = []
+    p = 0
+    cosum = [0.0] * SIZE  # cosum[j] = somma di x[i] * x[i+j]
+    i = 0
+    sum_x = 0.0
+
+    # inizializza il buffer con i primi K_LAG+1 valori
+    while i < SIZE:
+        x = data[i]
+        sum_x += x
+        hold.append(x)
+        i += 1
+
+    # consuma il resto della serie
+    while i < n:
+        for j in range(SIZE):
+            cosum[j] += hold[p] * hold[(p + j) % SIZE]
+        x = data[i]
+        sum_x += x
+        hold[p] = x
+        p = (p + 1) % SIZE
+        i += 1
+
+    # svuota il buffer circolare
+    i_empty = i
+    while i_empty < n + SIZE:
+        for j in range(SIZE):
+            cosum[j] += hold[p] * hold[(p + j) % SIZE]
+        hold[p] = 0.0
+        p = (p + 1) % SIZE
+        i_empty += 1
+
+    mean = sum_x / n
+    for j in range(SIZE):
+        cosum[j] = (cosum[j] / (n - j)) - (mean * mean)
+
+    stdev = sqrt(cosum[0]) if cosum[0] > 0 else 0.0
+    autocorr = [cosum[j] / cosum[0] if cosum[0] != 0 else 0.0 for j in range(1, SIZE)]
+    return mean, stdev, autocorr
+
+
+
+
+
+
+
+
+
+# -------------------------------
 # ARRIVI - processo di Poisson non omogeneo (in secondi)
 # -------------------------------
 def GetLambda(current_time):
